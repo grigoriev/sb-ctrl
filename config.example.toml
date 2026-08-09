@@ -36,6 +36,6 @@ limit_rate = ""                   # e.g. "2M" to cap bandwidth; empty = unlimite
 parallel   = 1
 
 [api]
-host  = "127.0.0.1"               # bound behind the reverse proxy
+host  = "127.0.0.1"               # behind a systemd reverse proxy; use "0.0.0.0" in Docker
 port  = 8765
 token = "CHANGE_ME"               # bearer token clients must send
