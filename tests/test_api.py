@@ -5,10 +5,20 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from sb_ctrl import api, launcher
+from sb_ctrl import api, launcher, tmdb
 from sb_ctrl.config import Config
 from sb_ctrl.jobs import create_job
 from sb_ctrl.rtorrent import Torrent
+from sb_ctrl.tmdb import Candidate
+
+
+class _FakeTMDb:
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        pass
+
+    def search(self, query: str, media: str = "multi") -> list[Candidate]:
+        return [Candidate(7, "movie", "T", "Orig", "2020", "o", False)]
+
 
 ONE = Torrent(
     hash="H1",
@@ -55,6 +65,15 @@ def test_torrents(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(api, "RTorrent", _FakeRT)
     resp = _client(Config()).get("/torrents")
     assert resp.json()["items"][0]["name"] == "Movie"
+
+
+def test_search(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(tmdb, "TMDb", _FakeTMDb)
+    resp = _client(Config()).get("/search", params={"name": "Some.Movie.2020.1080p"})
+    body = resp.json()
+    assert body["guess"]["media"] == "movie"
+    assert body["candidates"][0]["kind"] == "movie"
+    assert body["candidates"][0]["original_title"] == "Orig"
 
 
 def test_plan(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

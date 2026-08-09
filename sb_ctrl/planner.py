@@ -30,10 +30,16 @@ def plan(cfg: Config, torrent: dict[str, Any], kind: str, name: str | None = Non
     if is_multi:
         staging_item = safe
         dest_path = f"{root}/{safe}"
-    else:
+    elif is_film:
+        # a single-file movie is renamed to the canonical "Name (Year).ext"
         staging_item = basename
-        flat = is_film and cfg.movie_layout == "flat"
-        dest_path = f"{root}/{basename}" if flat else f"{root}/{safe}/{basename}"
+        ext = os.path.splitext(basename)[1]
+        final = f"{safe}{ext}"
+        dest_path = f"{root}/{final}" if cfg.movie_layout == "flat" else f"{root}/{safe}/{final}"
+    else:
+        # a single-file episode keeps its name until the series-naming phase
+        staging_item = basename
+        dest_path = f"{root}/{safe}/{basename}"
 
     spec: dict[str, Any] = {
         "kind": kind,

@@ -6,9 +6,18 @@ from pathlib import Path
 
 import pytest
 
-from sb_ctrl import cli, launcher, worker
+from sb_ctrl import cli, launcher, tmdb, worker
 from sb_ctrl.jobs import create_job, read_state
 from sb_ctrl.rtorrent import Torrent
+from sb_ctrl.tmdb import Candidate
+
+
+class _FakeTMDb:
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        pass
+
+    def search(self, query: str, media: str = "multi") -> list[Candidate]:
+        return [Candidate(7, "movie", "T", "Orig", "2020", "o", False)]
 
 
 def _write_cfg(tmp_path: Path) -> Path:
@@ -79,6 +88,13 @@ def test_error_is_reported_as_json(monkeypatch: pytest.MonkeyPatch, capsys: pyte
     assert cli.main(["list"]) == 1
     err = json.loads(capsys.readouterr().err)
     assert err["error"] == "nope"
+
+
+def test_search_cmd(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr(tmdb, "TMDb", _FakeTMDb)
+    assert cli.main(["search", "Some.Movie.2020"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["candidates"][0]["kind"] == "movie"
 
 
 def test_plan_via_stdin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
