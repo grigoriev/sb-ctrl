@@ -41,9 +41,13 @@ def plan(cfg: Config, torrent: dict[str, Any], kind: str, name: str | None = Non
         staging_item = basename
         dest_path = f"{root}/{safe}/{basename}"
 
+    # a series folder is laid out into Season NN/SNNEMM.ext; everything else moves whole
+    mode = "episodes" if is_multi and not is_film else "move"
+
     spec: dict[str, Any] = {
         "kind": kind,
         "name": safe,
+        "mode": mode,
         "source": {
             "host": cfg.sftp_host,
             "base_rel": base_rel,
