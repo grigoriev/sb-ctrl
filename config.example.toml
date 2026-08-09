@@ -1,0 +1,41 @@
+# sb-ctrl configuration. Copy to ~/.config/sb-ctrl/config.toml and chmod 600.
+# All logic and secrets live here; no client stores any of it.
+
+staging_root = "/data/.staging"   # MUST be on the same filesystem as the library roots
+
+[rtorrent]
+url  = "https://sb.mim.box.ca/xmlrpc"
+user = "CHANGE_ME"
+pass = "CHANGE_ME"
+
+[sftp]
+host = "sb.g7v.io"
+base = "files"                    # remote dir that rTorrent base paths live under
+
+[tmdb]
+key  = "CHANGE_ME"
+lang = "en-US"
+
+[roots]
+movies         = "/data/media/movies"
+cartoons       = "/data/media/cartoons"
+series         = "/data/media/series"
+cartoon_series = "/data/media/cartoon-series"
+
+[perms]
+owner     = "plex"
+group     = "plex"
+dir_mode  = 775
+file_mode = 664
+
+[layout]
+movie = "folder"                  # "folder" (per-title dir) or "flat"
+
+[lftp]
+limit_rate = ""                   # e.g. "2M" to cap bandwidth; empty = unlimited
+parallel   = 1
+
+[api]
+host  = "127.0.0.1"               # bound behind the reverse proxy
+port  = 8765
+token = "CHANGE_ME"               # bearer token clients must send
