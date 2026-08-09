@@ -49,6 +49,10 @@ Python 3.12+. FastAPI + uvicorn.
 
 ## Status
 
-Alpha. Config, rTorrent listing, the transfer engine (plan/run/worker), and the
-REST API are implemented; TMDb + naming and the deploy (systemd + Caddy) land in
-later phases per SPEC.md.
+Beta. Implemented: config, rTorrent listing, the transfer engine
+(plan/run/worker), the REST API, TMDb search + movie naming, series season
+layout, and the deploy guide (systemd + Caddy). Clients: the
+[alfred-seedbox-workflow](https://github.com/grigoriev/alfred-seedbox-workflow)
+and [sb-ctrl-ui](https://github.com/grigoriev/sb-ctrl-ui). Still to fill in: the
+`[TBD]` config values (SPEC.md section 11). Later: file-subset selection and
+adding magnets.
