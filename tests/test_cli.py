@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from sb_pull import cli, launcher, worker
-from sb_pull.jobs import create_job, read_state
-from sb_pull.rtorrent import Torrent
+from sb_ctrl import cli, launcher, worker
+from sb_ctrl.jobs import create_job, read_state
+from sb_ctrl.rtorrent import Torrent
 
 
 def _write_cfg(tmp_path: Path) -> Path:
@@ -54,7 +54,7 @@ def test_status_reads_jobs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caps
     jobs = tmp_path / ".jobs" / "001"
     jobs.mkdir(parents=True)
     (jobs / "state.json").write_text(json.dumps({"id": "001", "state": "active"}))
-    monkeypatch.setenv("SB_PULL_CONFIG", str(cfg))
+    monkeypatch.setenv("SB_CTRL_CONFIG", str(cfg))
     assert cli.main(["status"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["jobs"] == [{"id": "001", "state": "active"}]
@@ -65,7 +65,7 @@ def test_config_get_redacts(
 ) -> None:
     cfg = tmp_path / "c.toml"
     cfg.write_text('[tmdb]\nkey = "k"\n')
-    monkeypatch.setenv("SB_PULL_CONFIG", str(cfg))
+    monkeypatch.setenv("SB_CTRL_CONFIG", str(cfg))
     assert cli.main(["config", "get"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["tmdb_key"] == "***"
@@ -82,7 +82,7 @@ def test_error_is_reported_as_json(monkeypatch: pytest.MonkeyPatch, capsys: pyte
 
 
 def test_plan_via_stdin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
-    monkeypatch.setenv("SB_PULL_CONFIG", str(_write_cfg(tmp_path)))
+    monkeypatch.setenv("SB_CTRL_CONFIG", str(_write_cfg(tmp_path)))
     monkeypatch.setattr(cli, "RTorrent", _FakeRT)
     monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"hash": "H1", "kind": "movie"})))
     assert cli.main(["plan"]) == 0
@@ -94,7 +94,7 @@ def test_plan_via_stdin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys:
 def test_plan_unknown_hash_errors(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setenv("SB_PULL_CONFIG", str(_write_cfg(tmp_path)))
+    monkeypatch.setenv("SB_CTRL_CONFIG", str(_write_cfg(tmp_path)))
     monkeypatch.setattr(cli, "RTorrent", _FakeRT)
     monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"hash": "NOPE", "kind": "movie"})))
     assert cli.main(["plan"]) == 1
@@ -104,7 +104,7 @@ def test_plan_unknown_hash_errors(
 def test_run_creates_job_and_launches(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setenv("SB_PULL_CONFIG", str(_write_cfg(tmp_path)))
+    monkeypatch.setenv("SB_CTRL_CONFIG", str(_write_cfg(tmp_path)))
     launched: list[str] = []
 
     def fake_launch(job_id: str) -> str:
@@ -123,7 +123,7 @@ def test_run_creates_job_and_launches(
 def test_run_skips_on_collision(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setenv("SB_PULL_CONFIG", str(_write_cfg(tmp_path)))
+    monkeypatch.setenv("SB_CTRL_CONFIG", str(_write_cfg(tmp_path)))
     dest = tmp_path / "movies" / "Old"
     dest.mkdir(parents=True)
     spec = {"name": "Old", "dest_path": str(dest)}
@@ -135,7 +135,7 @@ def test_run_skips_on_collision(
 def test_run_job_dispatches_to_worker(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setenv("SB_PULL_CONFIG", str(_write_cfg(tmp_path)))
+    monkeypatch.setenv("SB_CTRL_CONFIG", str(_write_cfg(tmp_path)))
     called: list[Path] = []
     monkeypatch.setattr(worker, "run_job", lambda job_dir: called.append(job_dir))
     assert cli.main(["run-job", "J1"]) == 0
@@ -146,7 +146,7 @@ def test_run_job_dispatches_to_worker(
 def test_retry_resets_state_and_launches(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setenv("SB_PULL_CONFIG", str(_write_cfg(tmp_path)))
+    monkeypatch.setenv("SB_CTRL_CONFIG", str(_write_cfg(tmp_path)))
     job = create_job(f"{tmp_path}/staging", {"name": "X"}, job_id="J9")
     monkeypatch.setattr(launcher, "launch", lambda jid: "systemd")
     assert cli.main(["retry", "J9"]) == 0

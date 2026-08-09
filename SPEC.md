@@ -1,4 +1,4 @@
-# sb-pull — Specification (Draft v1)
+# sb-ctrl — Specification (Draft v1)
 
 Server-side **brain + agent** for the seedbox → Plex pipeline. Runs on Ubuntu
 `beaver.h.g7v.io`, written in **Python 3**. Holds all configuration and secrets,
@@ -14,12 +14,12 @@ Status: plan only, no implementation. Decisions are locked from the interview;
 
 | System | Role | Access |
 |---|---|---|
-| Mac + Alfred (`alfred-seedbox-workflow`) | Thin UI; runs `ssh beaver sb-pull <cmd> --json` | — |
-| **Ubuntu `beaver.h.g7v.io`** — **sb-pull** | Brain + agent: rTorrent, TMDb, naming, transfer, jobs | SSH key-based, LAN/VPN-only, always up |
+| Mac + Alfred (`alfred-seedbox-workflow`) | Thin UI; runs `ssh beaver sb-ctrl <cmd> --json` | — |
+| **Ubuntu `beaver.h.g7v.io`** — **sb-ctrl** | Brain + agent: rTorrent, TMDb, naming, transfer, jobs | SSH key-based, LAN/VPN-only, always up |
 | whatbox (seedbox) | rTorrent + source files | XML-RPC `https://sb.mim.box.ca/xmlrpc` (Basic auth); SFTP `sftp://sb.g7v.io` (key). Downloads under `files/`. Same host, two DNS names. |
 
 **Data flow:** whatbox → (lftp SFTP pull, **on Ubuntu**) → Ubuntu staging → Plex
-library. The Mac is never in the data path — it only triggers `sb-pull` over SSH.
+library. The Mac is never in the data path — it only triggers `sb-ctrl` over SSH.
 
 Consequence: everything (even listing) needs the Mac to reach beaver (LAN/VPN).
 Accepted — acting requires it anyway, and keeping all creds on the server is the
@@ -31,9 +31,9 @@ point.
 
 - **Python 3** (present on Ubuntu). Prefer stdlib; `urllib`/`http.client` for
   HTTP so there are no hard third-party deps (a `requests` extra is optional).
-- Package `sb_pull`, console entry point `sb-pull`. `pytest` for tests.
-- Deployed on beaver (pipx or a venv); invoked as `sb-pull <subcommand> --json`.
-- Config file: `~/.config/sb-pull/config.toml` (chmod 600). No secrets on the
+- Package `sb_ctrl`, console entry point `sb-ctrl`. `pytest` for tests.
+- Deployed on beaver (pipx or a venv); invoked as `sb-ctrl <subcommand> --json`.
+- Config file: `~/.config/sb-ctrl/config.toml` (chmod 600). No secrets on the
   command line or in the Alfred workflow.
 
 ---
@@ -56,7 +56,7 @@ point.
 | `lftp.parallel` | segmented/parallel transfer | modest |
 | `staging_root` | staging dir, **same filesystem as the libraries** | `[TBD]` |
 
-`sb-pull config` reads/edits this (so the Mac can open settings over SSH).
+`sb-ctrl config` reads/edits this (so the Mac can open settings over SSH).
 
 ---
 
@@ -139,7 +139,7 @@ samples, extras/featurettes, `.nfo`, `.txt`, images.
   error), `spec.json`, `log`.
 - `run` launches the worker via **`systemd-run --user`** (transient unit; linger
   enabled so it survives SSH/Mac disconnect). `nohup` fallback. The worker is
-  `sb-pull run-job <id>`.
+  `sb-ctrl run-job <id>`.
 - Worker steps:
   1. lftp pull into `<staging_root>/<id>/` — `mirror -c` (folder) / `get -c`
      (file), resume, optional `net:limit-rate` and parallel segments.

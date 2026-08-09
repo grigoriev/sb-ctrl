@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sb_pull.rtorrent import RpcRow, RTorrent
+from sb_ctrl.rtorrent import RpcRow, RTorrent
 
 # hash, name, size, complete, base_path, is_multi, finished
 ROWS: list[RpcRow] = [

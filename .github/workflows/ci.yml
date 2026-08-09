@@ -25,7 +25,7 @@ jobs:
           uv run ruff check .
           uv run ruff format --check .
       - name: Type check with mypy
-        run: uv run mypy sb_pull tests
+        run: uv run mypy sb_ctrl tests
       - name: Run tests with coverage
         run: uv run pytest tests/ -v --cov --cov-report=term-missing --cov-fail-under=90
 

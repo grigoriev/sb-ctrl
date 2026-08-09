@@ -1,9 +1,9 @@
-# sb-pull
+# sb-ctrl
 
-![CI](https://github.com/grigoriev/sb-pull/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/grigoriev/sb-ctrl/actions/workflows/ci.yml/badge.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=grigoriev_sb-pull&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=grigoriev_sb-pull)
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=grigoriev_sb-pull&metric=coverage)](https://sonarcloud.io/summary/new_code?id=grigoriev_sb-pull)
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=grigoriev_sb-ctrl&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=grigoriev_sb-ctrl)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=grigoriev_sb-ctrl&metric=coverage)](https://sonarcloud.io/summary/new_code?id=grigoriev_sb-ctrl)
 
 Server-side brain and agent for the seedbox to Plex pipeline. Runs on the Plex
 host, lists completed torrents on the rTorrent seedbox, and (in later phases)
@@ -19,14 +19,14 @@ Every command prints one JSON object to stdout; errors print `{"error": ...}` to
 stderr and exit non-zero.
 
 ```sh
-sb-pull list          # completed torrents on the seedbox (newest first)
-sb-pull status        # transfer jobs
-sb-pull config get    # effective configuration (secrets redacted)
+sb-ctrl list          # completed torrents on the seedbox (newest first)
+sb-ctrl status        # transfer jobs
+sb-ctrl config get    # effective configuration (secrets redacted)
 ```
 
 ## Configuration
 
-`~/.config/sb-pull/config.toml` (chmod 600). See SPEC.md section 3 for every
+`~/.config/sb-ctrl/config.toml` (chmod 600). See SPEC.md section 3 for every
 key. Nothing is stored on the Mac; all secrets live here.
 
 ## Development
@@ -34,7 +34,7 @@ key. Nothing is stored on the Mac; all secrets live here.
 ```sh
 uv sync --all-extras
 uv run ruff check . && uv run ruff format --check .
-uv run mypy sb_pull tests
+uv run mypy sb_ctrl tests
 uv run pytest --cov --cov-report=term-missing
 ```
 

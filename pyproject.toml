@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "sb-pull"
+name = "sb-ctrl"
 version = "0.1.0"
 description = "Seedbox to Plex pull agent: rTorrent + TMDb + lftp transfers, driven over SSH."
 readme = "README.md"
@@ -30,15 +30,15 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/grigoriev/sb-pull"
-Repository = "https://github.com/grigoriev/sb-pull"
-Issues = "https://github.com/grigoriev/sb-pull/issues"
+Homepage = "https://github.com/grigoriev/sb-ctrl"
+Repository = "https://github.com/grigoriev/sb-ctrl"
+Issues = "https://github.com/grigoriev/sb-ctrl/issues"
 
 [project.scripts]
-sb-pull = "sb_pull.cli:main"
+sb-ctrl = "sb_ctrl.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["sb_pull"]
+packages = ["sb_ctrl"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -53,13 +53,13 @@ select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
 ignore = []
 
 [tool.ruff.lint.isort]
-known-first-party = ["sb_pull"]
+known-first-party = ["sb_ctrl"]
 
 [tool.uv]
 required-version = ">=0.5.0"
 
 [tool.coverage.run]
-source = ["sb_pull"]
+source = ["sb_ctrl"]
 branch = true
 
 [tool.coverage.report]

@@ -4,7 +4,7 @@ the shared sanitizer and the kind-to-root mapping (SPEC.md sections 7 and 3).
 
 from __future__ import annotations
 
-from sb_pull.config import Config
+from sb_ctrl.config import Config
 
 KINDS = ("movie", "cartoon", "series", "cartoon_series")
 

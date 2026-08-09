@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from sb_pull.jobs import create_job, list_jobs, read_spec, read_state, write_state
+from sb_ctrl.jobs import create_job, list_jobs, read_spec, read_state, write_state
 
 
 def test_empty_staging_root_returns_nothing() -> None:

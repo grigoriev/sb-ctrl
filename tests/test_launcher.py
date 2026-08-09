@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sb_pull import launcher
+from sb_ctrl import launcher
 
 
 def test_argv_builders() -> None:
@@ -8,13 +8,13 @@ def test_argv_builders() -> None:
         "systemd-run",
         "--user",
         "--unit",
-        "sb-pull-J1",
+        "sb-ctrl-J1",
         "--",
-        "sb-pull",
+        "sb-ctrl",
         "run-job",
         "J1",
     ]
-    assert launcher.nohup_argv("J1") == ["nohup", "sb-pull", "run-job", "J1"]
+    assert launcher.nohup_argv("J1") == ["nohup", "sb-ctrl", "run-job", "J1"]
 
 
 def test_launch_uses_systemd_when_it_succeeds() -> None:

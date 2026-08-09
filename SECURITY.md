@@ -3,5 +3,5 @@
 ## Reporting a Vulnerability
 
 Please report security issues privately through GitHub's
-[private vulnerability reporting](https://github.com/grigoriev/sb-pull/security/advisories/new),
+[private vulnerability reporting](https://github.com/grigoriev/sb-ctrl/security/advisories/new),
 not through public issues. You will get a response within a few days.

@@ -1,4 +1,4 @@
-"""Command-line entry point for sb-pull.
+"""Command-line entry point for sb-ctrl.
 
 Every subcommand prints one JSON object to stdout. Errors print
 ``{"error": ...}`` to stderr and exit non-zero. This is the contract the Alfred
@@ -15,15 +15,15 @@ import os
 import sys
 from typing import IO, Any
 
-from sb_pull import __version__, launcher, planner, worker
-from sb_pull.config import Config, load_config
-from sb_pull.jobs import create_job, jobs_dir, list_jobs, write_state
-from sb_pull.rtorrent import RTorrent
+from sb_ctrl import __version__, launcher, planner, worker
+from sb_ctrl.config import Config, load_config
+from sb_ctrl.jobs import create_job, jobs_dir, list_jobs, write_state
+from sb_ctrl.rtorrent import RTorrent
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="sb-pull", description="Seedbox to Plex pull agent.")
-    parser.add_argument("--version", action="version", version=f"sb-pull {__version__}")
+    parser = argparse.ArgumentParser(prog="sb-ctrl", description="Seedbox to Plex pull agent.")
+    parser.add_argument("--version", action="version", version=f"sb-ctrl {__version__}")
     parser.add_argument("--json", action="store_true", help="JSON output (default and only format)")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("list", help="List completed torrents on the seedbox")

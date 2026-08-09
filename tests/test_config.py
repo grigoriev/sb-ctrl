@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from sb_pull.config import Config, from_dict, load_config
+from sb_ctrl.config import Config, from_dict, load_config
 
 SAMPLE = """
 staging_root = "/data/.staging"
@@ -69,7 +69,7 @@ def test_load_from_toml(tmp_path: Path) -> None:
 def test_env_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path = tmp_path / "c.toml"
     path.write_text('[tmdb]\nkey = "envkey"\n')
-    monkeypatch.setenv("SB_PULL_CONFIG", str(path))
+    monkeypatch.setenv("SB_CTRL_CONFIG", str(path))
     assert load_config().tmdb_key == "envkey"
 
 

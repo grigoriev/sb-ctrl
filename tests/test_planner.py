@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sb_pull.config import Config
-from sb_pull.planner import plan
+from sb_ctrl.config import Config
+from sb_ctrl.planner import plan
 
 
 def _cfg(tmp_path: Path, movie_layout: str = "folder") -> Config:

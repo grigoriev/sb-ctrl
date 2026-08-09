@@ -1,7 +1,7 @@
 """Transfer job state under ``<staging_root>/.jobs/<id>/``.
 
 Each job holds ``spec.json`` (the immutable transfer plan) and ``state.json``
-(the live state read by ``sb-pull status``). See SPEC.md section 8.
+(the live state read by ``sb-ctrl status``). See SPEC.md section 8.
 """
 
 from __future__ import annotations
