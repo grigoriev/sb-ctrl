@@ -13,11 +13,11 @@ Runner = Callable[[list[str]], int]
 
 
 def systemd_argv(job_id: str) -> list[str]:
-    return ["systemd-run", "--user", "--unit", f"sb-pull-{job_id}", "--", "sb-pull", "run-job", job_id]
+    return ["systemd-run", "--user", "--unit", f"sb-ctrl-{job_id}", "--", "sb-ctrl", "run-job", job_id]
 
 
 def nohup_argv(job_id: str) -> list[str]:
-    return ["nohup", "sb-pull", "run-job", job_id]
+    return ["nohup", "sb-ctrl", "run-job", job_id]
 
 
 def _run(argv: list[str]) -> int:  # pragma: no cover - spawns a real process

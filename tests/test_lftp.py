@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sb_pull.lftp import build_command
+from sb_ctrl.lftp import build_command
 
 
 def test_mirror_for_a_folder() -> None:

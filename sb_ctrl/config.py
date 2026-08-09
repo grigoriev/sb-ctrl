@@ -1,4 +1,4 @@
-"""Server-side configuration for sb-pull, loaded from a TOML file.
+"""Server-side configuration for sb-ctrl, loaded from a TOML file.
 
 All logic and secrets live on the server; the Mac front-end holds none. See
 SPEC.md section 3 for the field reference.
@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-DEFAULT_CONFIG_PATH = Path.home() / ".config" / "sb-pull" / "config.toml"
+DEFAULT_CONFIG_PATH = Path.home() / ".config" / "sb-ctrl" / "config.toml"
 
 
 @dataclass(frozen=True)
@@ -82,12 +82,12 @@ def from_dict(data: dict[str, Any]) -> Config:
 
 
 def load_config(path: Path | None = None) -> Config:
-    """Load the config from ``path`` (or $SB_PULL_CONFIG, or the default).
+    """Load the config from ``path`` (or $SB_CTRL_CONFIG, or the default).
 
     A missing file yields all defaults, so the CLI still runs before setup.
     """
     if path is None:
-        env = os.environ.get("SB_PULL_CONFIG")
+        env = os.environ.get("SB_CTRL_CONFIG")
         path = Path(env) if env else DEFAULT_CONFIG_PATH
     if not path.exists():
         return Config()

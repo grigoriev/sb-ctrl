@@ -14,8 +14,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from sb_pull import lftp
-from sb_pull.jobs import jobs_dir, read_spec, write_state
+from sb_ctrl import lftp
+from sb_ctrl.jobs import jobs_dir, read_spec, write_state
 
 # progress(pct, rate, eta)
 ProgressCb = Callable[[int, str, str], None]

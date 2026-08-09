@@ -9,8 +9,8 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from sb_pull.config import Config
-from sb_pull.naming import root_for_kind, sanitize
+from sb_ctrl.config import Config
+from sb_ctrl.naming import root_for_kind, sanitize
 
 
 def plan(cfg: Config, torrent: dict[str, Any], kind: str, name: str | None = None) -> dict[str, Any]:

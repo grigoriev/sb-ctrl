@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from sb_pull.config import Config
-from sb_pull.naming import root_for_kind, sanitize
+from sb_ctrl.config import Config
+from sb_ctrl.naming import root_for_kind, sanitize
 
 
 def test_sanitize_replaces_and_strips() -> None:

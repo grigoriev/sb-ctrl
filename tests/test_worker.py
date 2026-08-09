@@ -3,10 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from sb_pull.config import Config
-from sb_pull.jobs import create_job, read_state
-from sb_pull.planner import plan
-from sb_pull.worker import run_job
+from sb_ctrl.config import Config
+from sb_ctrl.jobs import create_job, read_state
+from sb_ctrl.planner import plan
+from sb_ctrl.worker import run_job
 
 
 def _cfg(tmp_path: Path, movie_layout: str = "folder") -> Config:
