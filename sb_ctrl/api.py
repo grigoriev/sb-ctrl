@@ -14,7 +14,7 @@ from typing import Annotated, Any
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
-from sb_ctrl import __version__, launcher, planner
+from sb_ctrl import __version__, launcher, planner, tmdb
 from sb_ctrl.config import Config, load_config
 from sb_ctrl.jobs import create_job, jobs_dir, list_jobs, read_state, write_state
 from sb_ctrl.rtorrent import RTorrent
@@ -80,6 +80,16 @@ def create_app() -> FastAPI:
     @app.get("/torrents", dependencies=[AuthDep])
     def torrents(cfg: ConfigDep) -> dict[str, Any]:
         return {"items": [dataclasses.asdict(t) for t in _client(cfg).list_completed()]}
+
+    @app.get("/search", dependencies=[AuthDep])
+    def search(name: str, cfg: ConfigDep) -> dict[str, Any]:
+        guess = tmdb.guess(name)
+        client = tmdb.TMDb(cfg.tmdb_key, cfg.tmdb_lang)
+        candidates = client.search(guess["query"] or name, guess["media"])
+        return {
+            "guess": guess,
+            "candidates": [{**dataclasses.asdict(c), "kind": c.kind} for c in candidates],
+        }
 
     @app.post("/plan", dependencies=[AuthDep], responses={404: {"description": "torrent not found"}})
     def plan(req: PlanRequest, cfg: ConfigDep) -> dict[str, Any]:

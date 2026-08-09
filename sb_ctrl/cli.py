@@ -15,7 +15,7 @@ import os
 import sys
 from typing import IO, Any
 
-from sb_ctrl import __version__, launcher, planner, worker
+from sb_ctrl import __version__, launcher, planner, tmdb, worker
 from sb_ctrl.config import Config, load_config
 from sb_ctrl.jobs import create_job, jobs_dir, list_jobs, write_state
 from sb_ctrl.rtorrent import RTorrent
@@ -30,6 +30,8 @@ def _build_parser() -> argparse.ArgumentParser:
     sub.add_parser("status", help="List transfer jobs")
     cfg = sub.add_parser("config", help="Show configuration")
     cfg.add_argument("action", choices=["get"], nargs="?", default="get")
+    sp = sub.add_parser("search", help="Search TMDb for a torrent name")
+    sp.add_argument("name")
     sub.add_parser("plan", help="Plan a transfer (reads JSON from stdin)")
     sub.add_parser("run", help="Start a transfer (reads a job spec from stdin)")
     rj = sub.add_parser("run-job", help="Run a job in the foreground (internal)")
@@ -55,6 +57,17 @@ def _cmd_status() -> dict[str, Any]:
 
 def _cmd_config() -> dict[str, Any]:
     return load_config().as_dict()
+
+
+def _cmd_search(name: str) -> dict[str, Any]:
+    cfg = load_config()
+    guess = tmdb.guess(name)
+    client = tmdb.TMDb(cfg.tmdb_key, cfg.tmdb_lang)
+    candidates = client.search(guess["query"] or name, guess["media"])
+    return {
+        "guess": guess,
+        "candidates": [{**dataclasses.asdict(c), "kind": c.kind} for c in candidates],
+    }
 
 
 def _cmd_plan(stream: IO[str]) -> dict[str, Any]:
@@ -112,6 +125,8 @@ def main(argv: list[str] | None = None) -> int:
             payload = _cmd_status()
         elif args.command == "config":
             payload = _cmd_config()
+        elif args.command == "search":
+            payload = _cmd_search(args.name)
         elif args.command == "plan":
             payload = _cmd_plan(sys.stdin)
         elif args.command == "run":

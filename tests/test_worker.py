@@ -68,13 +68,13 @@ def test_single_file_job(tmp_path: Path) -> None:
 
     calls, chowner = _chowner_recorder()
     run_job(job, transfer=transfer, chowner=chowner)
-    assert (tmp_path / "movies" / "Film.2024.mkv").is_file()
+    assert (tmp_path / "movies" / "Film 2024.mkv").is_file()
     assert read_state(job)["state"] == "done"
 
 
 def test_overwrite_replaces_existing(tmp_path: Path) -> None:
     cfg = _cfg(tmp_path, "flat")
-    dest = tmp_path / "movies" / "Film.2024.mkv"
+    dest = tmp_path / "movies" / "Film 2024.mkv"
     dest.parent.mkdir(parents=True)
     dest.write_text("old")
     spec = plan(cfg, {"name": "Film 2024", "size": 1, "is_multi": False, "base_rel": "files/Film.2024.mkv"}, "movie")[

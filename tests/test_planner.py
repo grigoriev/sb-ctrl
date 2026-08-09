@@ -35,13 +35,19 @@ def test_single_movie_folder_layout(tmp_path: Path) -> None:
     result = plan(cfg, _torrent("Film 2024", "files/Film.2024.mkv", False), "movie")
     spec = result["job_spec"]
     assert spec["staging_item"] == "Film.2024.mkv"
-    assert spec["dest_path"] == f"{tmp_path}/movies/Film 2024/Film.2024.mkv"
+    assert spec["dest_path"] == f"{tmp_path}/movies/Film 2024/Film 2024.mkv"
 
 
 def test_single_movie_flat_layout(tmp_path: Path) -> None:
     cfg = _cfg(tmp_path, "flat")
     result = plan(cfg, _torrent("Film 2024", "files/Film.2024.mkv", False), "movie")
-    assert result["job_spec"]["dest_path"] == f"{tmp_path}/movies/Film.2024.mkv"
+    assert result["job_spec"]["dest_path"] == f"{tmp_path}/movies/Film 2024.mkv"
+
+
+def test_single_episode_keeps_its_name(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    result = plan(cfg, _torrent("Show", "files/Show.S01E02.mkv", False), "series")
+    assert result["job_spec"]["dest_path"] == f"{tmp_path}/series/Show/Show.S01E02.mkv"
 
 
 def test_name_override_and_collision(tmp_path: Path) -> None:
