@@ -8,7 +8,7 @@ React UI) talk to this API; TLS is terminated by a reverse proxy in front.
 from __future__ import annotations
 
 import dataclasses
-import os
+from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -19,6 +19,17 @@ from sb_ctrl.config import Config, load_config
 from sb_ctrl.jobs import create_job, jobs_dir, list_jobs, read_state, write_state
 from sb_ctrl.rtorrent import RTorrent
 
+_NOT_FOUND = "job not found"
+
+
+def _find_job(cfg: Config, job_id: str) -> Path | None:
+    """Find a job directory by matching an existing entry name, so a client-
+    supplied id is never used to build a path (no traversal)."""
+    root = jobs_dir(cfg.staging_root)
+    if not root.is_dir():
+        return None
+    return next((e for e in root.iterdir() if e.name == job_id and e.is_dir()), None)
+
 
 class PlanRequest(BaseModel):
     hash: str
@@ -27,7 +38,9 @@ class PlanRequest(BaseModel):
 
 
 class RunRequest(BaseModel):
-    job_spec: dict[str, Any]
+    hash: str
+    kind: str
+    name: str | None = None
     collision: str = "overwrite"
 
 
@@ -68,39 +81,44 @@ def create_app() -> FastAPI:
     def torrents(cfg: ConfigDep) -> dict[str, Any]:
         return {"items": [dataclasses.asdict(t) for t in _client(cfg).list_completed()]}
 
-    @app.post("/plan", dependencies=[AuthDep])
+    @app.post("/plan", dependencies=[AuthDep], responses={404: {"description": "torrent not found"}})
     def plan(req: PlanRequest, cfg: ConfigDep) -> dict[str, Any]:
         match = next((t for t in _client(cfg).list_completed() if t.hash == req.hash), None)
         if match is None:
             raise HTTPException(status_code=404, detail="torrent not found")
         return planner.plan(cfg, dataclasses.asdict(match), req.kind, req.name)
 
-    @app.post("/jobs", dependencies=[AuthDep])
+    @app.post("/jobs", dependencies=[AuthDep], responses={404: {"description": "torrent not found"}})
     def create(req: RunRequest, cfg: ConfigDep) -> dict[str, Any]:
-        spec = req.job_spec
-        if os.path.exists(spec["dest_path"]) and req.collision != "overwrite":
-            return {"skipped": True, "dest_path": spec["dest_path"]}
-        job = create_job(cfg.staging_root, spec)
+        match = next((t for t in _client(cfg).list_completed() if t.hash == req.hash), None)
+        if match is None:
+            raise HTTPException(status_code=404, detail="torrent not found")
+        result = planner.plan(cfg, dataclasses.asdict(match), req.kind, req.name)
+        if result["collision"] and req.collision != "overwrite":
+            return {"skipped": True, "dest_path": result["dest_path"]}
+        job = create_job(cfg.staging_root, result["job_spec"])
         return {"job_id": job.name, "launcher": launcher.launch(job.name)}
 
     @app.get("/jobs", dependencies=[AuthDep])
     def jobs(cfg: ConfigDep) -> dict[str, Any]:
         return {"jobs": list_jobs(cfg.staging_root)}
 
-    @app.get("/jobs/{job_id}", dependencies=[AuthDep])
+    _job_errors: dict[int | str, dict[str, Any]] = {404: {"description": _NOT_FOUND}}
+
+    @app.get("/jobs/{job_id}", dependencies=[AuthDep], responses=_job_errors)
     def job(job_id: str, cfg: ConfigDep) -> dict[str, Any]:
-        job_dir = jobs_dir(cfg.staging_root) / job_id
-        if not (job_dir / "state.json").is_file():
-            raise HTTPException(status_code=404, detail="job not found")
+        job_dir = _find_job(cfg, job_id)
+        if job_dir is None or not (job_dir / "state.json").is_file():
+            raise HTTPException(status_code=404, detail=_NOT_FOUND)
         return read_state(job_dir)
 
-    @app.post("/jobs/{job_id}/retry", dependencies=[AuthDep])
+    @app.post("/jobs/{job_id}/retry", dependencies=[AuthDep], responses=_job_errors)
     def retry(job_id: str, cfg: ConfigDep) -> dict[str, Any]:
-        job_dir = jobs_dir(cfg.staging_root) / job_id
-        if not job_dir.is_dir():
-            raise HTTPException(status_code=404, detail="job not found")
+        job_dir = _find_job(cfg, job_id)
+        if job_dir is None:
+            raise HTTPException(status_code=404, detail=_NOT_FOUND)
         write_state(job_dir, state="queued", error="", pct=0)
-        return {"job_id": job_id, "launcher": launcher.launch(job_id)}
+        return {"job_id": job_dir.name, "launcher": launcher.launch(job_dir.name)}
 
     @app.get("/config", dependencies=[AuthDep])
     def config(cfg: ConfigDep) -> dict[str, Any]:

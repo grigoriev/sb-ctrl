@@ -72,6 +72,7 @@ def test_plan_unknown_hash_404(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_create_job_and_launch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(api, "RTorrent", _FakeRT)
     launched: list[str] = []
 
     def fake_launch(job_id: str) -> str:
@@ -79,19 +80,19 @@ def test_create_job_and_launch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
         return "systemd"
 
     monkeypatch.setattr(launcher, "launch", fake_launch)
-    cfg = Config(staging_root=str(tmp_path / "staging"))
-    spec = {"name": "New", "dest_path": str(tmp_path / "movies" / "New")}
-    resp = _client(cfg).post("/jobs", json={"job_spec": spec, "collision": "overwrite"})
+    cfg = Config(root_movies=str(tmp_path / "movies"), staging_root=str(tmp_path / "staging"))
+    resp = _client(cfg).post("/jobs", json={"hash": "H1", "kind": "movie", "collision": "overwrite"})
     assert resp.status_code == 200
     assert launched == [resp.json()["job_id"]]
 
 
-def test_create_job_skips_on_collision(tmp_path: Path) -> None:
-    dest = tmp_path / "movies" / "Old"
-    dest.mkdir(parents=True)
-    cfg = Config(staging_root=str(tmp_path / "staging"))
-    spec = {"name": "Old", "dest_path": str(dest)}
-    resp = _client(cfg).post("/jobs", json={"job_spec": spec, "collision": "skip"})
+def test_create_job_skips_on_collision(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(api, "RTorrent", _FakeRT)
+    dest = tmp_path / "movies" / "Movie" / "Movie.mkv"
+    dest.parent.mkdir(parents=True)
+    dest.write_text("x")
+    cfg = Config(root_movies=str(tmp_path / "movies"), staging_root=str(tmp_path / "staging"))
+    resp = _client(cfg).post("/jobs", json={"hash": "H1", "kind": "movie", "collision": "skip"})
     assert resp.json()["skipped"] is True
 
 
