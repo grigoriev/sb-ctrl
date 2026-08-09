@@ -201,14 +201,15 @@ samples, extras/featurettes, `.nfo`, `.txt`, images.
 
 ## 12. Build phasing
 
-- **P0** config + `list` (rTorrent) + path mapping + `status` skeleton.
-- **P1** `plan`/`run`/`run-job`: whole-title transfer (no rename) + job state.
-- **P2** TMDb + movie naming + folder + perms + atomic mv.
-- **P3** TV mapping + season layout + subtitles.
-- **P4** file-subset selection, `retry`, polish.
-- **Later** add magnet/.torrent; batch queue.
+- **P0** config + `list` (rTorrent) + path mapping + `status` skeleton. ✅
+- **P1** `plan`/`run`/`run-job`: whole-title transfer + job state + `systemd-run`. ✅
+- **P2** TMDb search + movie naming (rename to `Name (Year).ext`). ✅
+- **P3** series season layout + `SxxEyy` + subtitles. ✅
+- **REST** FastAPI adapter + bearer auth + deploy guide. ✅
+- **P4** file-subset selection, batch queue, add magnet/.torrent. Later.
 
 ---
 
-The Mac front-end and its wizard UX are specified in
-**`alfred-seedbox-workflow/SPEC.md`**, which consumes the CLI contract in §4.
+Clients consume the REST API in §4: the Alfred workflow
+(**`alfred-seedbox-workflow/SPEC.md`**) and the React UI
+(**`sb-ctrl-ui`**). The OpenAPI schema at `/docs` types both.
