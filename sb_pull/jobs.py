@@ -1,12 +1,15 @@
-"""Transfer job state, stored under ``<staging_root>/.jobs/<id>/state.json``.
+"""Transfer job state under ``<staging_root>/.jobs/<id>/``.
 
-For now this reads job state for the ``status`` command; the worker that writes
-it arrives with the transfer phase (SPEC.md section 8).
+Each job holds ``spec.json`` (the immutable transfer plan) and ``state.json``
+(the live state read by ``sb-pull status``). See SPEC.md section 8.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -15,8 +18,52 @@ def jobs_dir(staging_root: str) -> Path:
     return Path(staging_root) / ".jobs"
 
 
+def new_job_id() -> str:
+    """A sortable, unique job id: timestamp plus a short random suffix."""
+    return time.strftime("%Y%m%d-%H%M%S") + "-" + os.urandom(2).hex()
+
+
+def create_job(staging_root: str, spec: dict[str, Any], job_id: str | None = None) -> Path:
+    """Create the job directory, write its spec, and mark it queued."""
+    job_id = job_id or new_job_id()
+    job = jobs_dir(staging_root) / job_id
+    job.mkdir(parents=True, exist_ok=True)
+    spec = {**spec, "id": job_id}
+    (job / "spec.json").write_text(json.dumps(spec, indent=2))
+    write_state(job, state="queued", pct=0)
+    return job
+
+
+def read_spec(job_dir: Path) -> dict[str, Any]:
+    data: dict[str, Any] = json.loads((job_dir / "spec.json").read_text())
+    return data
+
+
+def write_state(job_dir: Path, **fields: Any) -> None:
+    """Merge ``fields`` into the job's state file, keeping id and name."""
+    state: dict[str, Any] = {}
+    path = job_dir / "state.json"
+    if path.is_file():
+        try:
+            state = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            state = {}
+    state.setdefault("id", job_dir.name)
+    with contextlib.suppress(OSError, json.JSONDecodeError):
+        state.setdefault("name", read_spec(job_dir).get("name", job_dir.name))
+    state.update(fields)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(state))
+    tmp.replace(path)
+
+
+def read_state(job_dir: Path) -> dict[str, Any]:
+    data: dict[str, Any] = json.loads((job_dir / "state.json").read_text())
+    return data
+
+
 def list_jobs(staging_root: str) -> list[dict[str, Any]]:
-    """Return every job's state, newest id last. Empty when nothing is staged."""
+    """Return every job's state, oldest id first. Empty when nothing is staged."""
     if not staging_root:
         return []
     root = jobs_dir(staging_root)
