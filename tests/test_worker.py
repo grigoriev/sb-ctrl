@@ -33,7 +33,7 @@ def _chowner_recorder() -> tuple[list[tuple[str, str, str]], Any]:
 
 def test_folder_job_moves_into_library_and_sets_state(tmp_path: Path) -> None:
     cfg = _cfg(tmp_path)
-    spec = plan(cfg, {"name": "The Show S01", "size": 4, "is_multi": True, "base_rel": "files/The Show S01"}, "series")[
+    spec = plan(cfg, {"name": "The Show S01", "size": 4, "is_multi": True, "base_rel": "files/The Show S01"}, "movie")[
         "job_spec"
     ]
     job = create_job(cfg.staging_root, spec, job_id="J1")
@@ -46,7 +46,7 @@ def test_folder_job_moves_into_library_and_sets_state(tmp_path: Path) -> None:
     calls, chowner = _chowner_recorder()
     run_job(job, transfer=transfer, chowner=chowner)
 
-    dest = tmp_path / "series" / "The Show S01"
+    dest = tmp_path / "movies" / "The Show S01"
     assert (dest / "ep.mkv").is_file()
     state = read_state(job)
     assert state["state"] == "done"
@@ -89,6 +89,28 @@ def test_overwrite_replaces_existing(tmp_path: Path) -> None:
     _, chowner = _chowner_recorder()
     run_job(job, transfer=transfer, chowner=chowner)
     assert dest.read_text() == "new"
+
+
+def test_series_pack_lays_out_episodes(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    spec = plan(cfg, {"name": "The Show", "size": 4, "is_multi": True, "base_rel": "files/The Show S01"}, "series")[
+        "job_spec"
+    ]
+    job = create_job(cfg.staging_root, spec, job_id="J5")
+
+    def transfer(spec: dict[str, Any], item: Path, progress: Any) -> None:
+        item.mkdir(parents=True, exist_ok=True)
+        (item / "The.Show.S01E01.mkv").write_text("v")
+        (item / "The.Show.S01E02.mkv").write_text("v")
+        (item / "The.Show.S01E01.en.srt").write_text("s")
+
+    _, chowner = _chowner_recorder()
+    run_job(job, transfer=transfer, chowner=chowner)
+    season = tmp_path / "series" / "The Show" / "Season 01"
+    assert (season / "S01E01.mkv").is_file()
+    assert (season / "S01E02.mkv").is_file()
+    assert (season / "S01E01.en.srt").is_file()
+    assert read_state(job)["state"] == "done"
 
 
 def test_failure_records_error(tmp_path: Path) -> None:

@@ -14,7 +14,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from sb_ctrl import lftp
+from sb_ctrl import episodes, lftp
 from sb_ctrl.jobs import jobs_dir, read_spec, write_state
 
 # progress(pct, rate, eta)
@@ -59,7 +59,24 @@ def _apply_perms(root: Path, perms: dict[str, Any], chowner: Chowner) -> None:
             chowner(path, owner, group)
 
 
+def _finalize_episodes(spec: dict[str, Any], item: Path, chowner: Chowner) -> None:
+    show_dir = spec["dest_path"]
+    targets = episodes.episode_targets(item, show_dir)
+    if not targets:
+        raise ValueError("no episodes recognized in the pack")
+    for src, target in targets:
+        dest = Path(target)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if dest.exists():
+            dest.unlink()
+        os.replace(src, dest)
+    _apply_perms(Path(show_dir), spec["perms"], chowner)
+
+
 def _finalize(spec: dict[str, Any], item: Path, chowner: Chowner) -> None:
+    if spec.get("mode") == "episodes":
+        _finalize_episodes(spec, item, chowner)
+        return
     _apply_perms(item, spec["perms"], chowner)
     dest = Path(spec["dest_path"])
     dest.parent.mkdir(parents=True, exist_ok=True)
