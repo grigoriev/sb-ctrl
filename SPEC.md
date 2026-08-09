@@ -14,14 +14,14 @@ Status: plan only, no implementation. Decisions are locked from the interview;
 
 | System | Role | Access |
 |---|---|---|
-| Mac + Alfred (`alfred-seedbox-workflow`) | Thin UI; runs `ssh beaver sb-ctrl <cmd> --json` | — |
-| **Ubuntu `beaver.h.g7v.io`** — **sb-ctrl** | Brain + agent: rTorrent, TMDb, naming, transfer, jobs | SSH key-based, LAN/VPN-only, always up |
+| Clients (`alfred-seedbox-workflow`, a future React UI) | Thin UIs over the REST API | HTTPS + bearer token |
+| **Ubuntu `beaver.h.g7v.io`** — **sb-ctrl** | Backend service + agent: rTorrent, TMDb, naming, transfer, jobs | REST over HTTPS, LAN/VPN-only, always up |
 | whatbox (seedbox) | rTorrent + source files | XML-RPC `https://sb.mim.box.ca/xmlrpc` (Basic auth); SFTP `sftp://sb.g7v.io` (key). Downloads under `files/`. Same host, two DNS names. |
 
 **Data flow:** whatbox → (lftp SFTP pull, **on Ubuntu**) → Ubuntu staging → Plex
-library. The Mac is never in the data path — it only triggers `sb-ctrl` over SSH.
+library. Clients are never in the data path — they only call the API.
 
-Consequence: everything (even listing) needs the Mac to reach beaver (LAN/VPN).
+Consequence: everything (even listing) needs the client to reach beaver (LAN/VPN).
 Accepted — acting requires it anyway, and keeping all creds on the server is the
 point.
 
@@ -29,12 +29,14 @@ point.
 
 ## 2. Language & layout
 
-- **Python 3** (present on Ubuntu). Prefer stdlib; `urllib`/`http.client` for
-  HTTP so there are no hard third-party deps (a `requests` extra is optional).
-- Package `sb_ctrl`, console entry point `sb-ctrl`. `pytest` for tests.
-- Deployed on beaver (pipx or a venv); invoked as `sb-ctrl <subcommand> --json`.
-- Config file: `~/.config/sb-ctrl/config.toml` (chmod 600). No secrets on the
-  command line or in the Alfred workflow.
+- **Python 3** (3.12 and 3.14), **FastAPI** + **uvicorn**. The domain modules
+  (`rtorrent`, `planner`, `jobs`, `lftp`, `launcher`, `worker`) use the standard
+  library; `api.py` is a thin FastAPI adapter over them.
+- Package `sb_ctrl`, console entry point `sb-ctrl` (`serve`, `run-job`, and
+  admin subcommands). `pytest` + FastAPI `TestClient`.
+- Deployed on beaver (venv) behind a reverse proxy; see Deployment.
+- Config file: `~/.config/sb-ctrl/config.toml` (chmod 600). No secrets on any
+  client.
 
 ---
 
@@ -55,28 +57,50 @@ point.
 | `lftp.limit_rate` | bandwidth cap | none |
 | `lftp.parallel` | segmented/parallel transfer | modest |
 | `staging_root` | staging dir, **same filesystem as the libraries** | `[TBD]` |
+| `api.host` / `api.port` | uvicorn bind | `127.0.0.1` / `8765` |
+| `api.token` | bearer token for the REST API | `[TBD]` |
 
-`sb-ctrl config` reads/edits this (so the Mac can open settings over SSH).
+`GET /config` returns this (secrets redacted); `sb-ctrl config get` prints it.
 
 ---
 
-## 4. CLI contract (invoked over SSH, JSON in/out)
+## 4. REST API (FastAPI)
 
-All commands accept `--json` and print a single JSON object to stdout; errors go
-to stderr with a non-zero exit and `{"error": "..."}`. This contract is the API
-the Alfred workflow depends on — keep it stable.
+Clients (the Alfred workflow, a future React UI) talk to a **FastAPI** service.
+Pydantic models formalize the contract and produce an OpenAPI schema at `/docs`.
+A bearer token (`Authorization: Bearer <token>`) guards every route except
+`/health`; when no token is configured the API is open, so first-time setup
+works. TLS is terminated by a reverse proxy (see Deployment).
 
-| Command | Input | Output |
+| Method + path | Body / params | Result |
 |---|---|---|
-| `list` | — | `{items:[{hash,name,size,is_multi,added,base_rel}]}` completed only, newest first |
-| `files <hash>` | hash | `{files:[{index,path,size,done}]}` |
-| `search` | `--kind auto|movie|cartoon|series|cartoon_series --name <torrent name>` | `{guess_kind, candidates:[{tmdb_id,media,title,original_title,year,overview}]}` |
-| `plan` | `{hash, files?, kind, tmdb_id}` | `{job_spec, targets:[{src_rel,dest_abs}], collisions:[dest_abs], perms}` (preview, no side effects) |
-| `run` | `{job_spec, collision: overwrite|skip|cancel}` | `{job_id}` — creates the job, launches the worker |
-| `status` | `[--job <id>]` | `{jobs:[{id,name,state,pct,rate,eta,error?}]}` |
-| `retry` | `<id>` | `{job_id}` |
-| `run-job` | `<id>` | internal worker (invoked by systemd-run), not called by the Mac |
-| `config` | `get|edit` | reads/edits `config.toml` |
+| `GET /health` | — | `{ok, version}` (no auth) |
+| `GET /torrents` | — | `{items:[{hash,name,size,is_multi,base_rel,finished,...}]}` completed, newest first |
+| `GET /torrents/{hash}/files` | — | `{files:[{index,path,size,done}]}` *(later phase)* |
+| `GET /search` | `kind`, `name` | `{guess_kind, candidates:[...]}` *(TMDb phase)* |
+| `POST /plan` | `{hash, kind, name?}` | `{job_spec, dest_path, collision}` (preview, no side effects) |
+| `POST /jobs` | `{job_spec, collision: overwrite\|skip\|cancel}` | `{job_id, launcher}` — creates and launches the job |
+| `GET /jobs` | — | `{jobs:[{id,name,state,pct,rate,eta,error?}]}` |
+| `GET /jobs/{id}` | — | the job's state |
+| `POST /jobs/{id}/retry` | — | `{job_id}` |
+| `GET /config` | — | effective config (secrets redacted) |
+| `PUT /config` | — | update config *(later phase)* |
+
+A thin CLI remains for the service entrypoint and the worker:
+`sb-ctrl serve` (run the API under uvicorn), `sb-ctrl run-job <id>` (invoked by
+`systemd-run`). `list` / `status` / `plan` / `run` / `retry` also exist on the
+CLI for admin and debugging.
+
+## 4a. Deployment
+
+- `sb-ctrl serve` runs uvicorn on `api.host:api.port` (default `127.0.0.1:8765`),
+  managed by a **systemd** service.
+- A **Caddy** reverse proxy terminates TLS with a **Let's Encrypt** certificate
+  and forwards to uvicorn. Because the host is VPN-only (port 80 not public),
+  Caddy obtains the cert via the **DNS-01** challenge using the `g7v.io` DNS
+  provider's API (provider `[TBD]`).
+- Transfers run as separate `systemd-run --user` units, so they survive a
+  service restart; the API tracks them through the job state files.
 
 ---
 
