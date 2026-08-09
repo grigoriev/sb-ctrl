@@ -31,6 +31,12 @@ file_mode = 664
 [layout]
 movie = "folder"                  # "folder" (per-title dir) or "flat"
 
+[files]
+# Recognized media extensions and junk skip patterns for season-pack layout.
+video_ext     = [".mkv", ".mp4", ".avi", ".m4v", ".mov", ".ts"]
+sub_ext       = [".srt", ".ass", ".sub"]
+skip_patterns = ["sample"]        # case-insensitive substrings; matches skip the file
+
 [lftp]
 limit_rate = ""                   # e.g. "2M" to cap bandwidth; empty = unlimited
 parallel   = 1

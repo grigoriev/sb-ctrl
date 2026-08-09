@@ -54,6 +54,9 @@ point.
 | `perms.owner` / `.group` | target ownership | `[TBD]` |
 | `perms.dir_mode` / `.file_mode` | target modes | `[TBD]` (suggest 775 / 664) |
 | `layout.movie` | `folder` (per-title dir) or `flat` | `folder` |
+| `files.video_ext` | recognized video extensions | `.mkv .mp4 .avi .m4v .mov .ts` |
+| `files.sub_ext` | recognized subtitle extensions | `.srt .ass .sub` |
+| `files.skip_patterns` | case-insensitive junk substrings to skip | `sample` |
 | `lftp.limit_rate` | bandwidth cap | none |
 | `lftp.parallel` | segmented/parallel transfer | modest |
 | `staging_root` | staging dir, **same filesystem as the libraries** | `[TBD]` |
