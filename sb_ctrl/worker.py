@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from sb_ctrl import episodes, lftp
+from sb_ctrl.config import DEFAULT_SKIP_PATTERNS, DEFAULT_SUB_EXT, DEFAULT_VIDEO_EXT
 from sb_ctrl.jobs import jobs_dir, read_spec, write_state
 
 # progress(pct, rate, eta)
@@ -61,7 +62,14 @@ def _apply_perms(root: Path, perms: dict[str, Any], chowner: Chowner) -> None:
 
 def _finalize_episodes(spec: dict[str, Any], item: Path, chowner: Chowner) -> None:
     show_dir = spec["dest_path"]
-    targets = episodes.episode_targets(item, show_dir)
+    files = spec.get("files") or {}
+    targets = episodes.episode_targets(
+        item,
+        show_dir,
+        video_ext=files.get("video_ext", DEFAULT_VIDEO_EXT),
+        sub_ext=files.get("sub_ext", DEFAULT_SUB_EXT),
+        skip_patterns=files.get("skip_patterns", DEFAULT_SKIP_PATTERNS),
+    )
     if not targets:
         raise ValueError("no episodes recognized in the pack")
     for src, target in targets:

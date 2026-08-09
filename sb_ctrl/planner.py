@@ -63,6 +63,11 @@ def plan(cfg: Config, torrent: dict[str, Any], kind: str, name: str | None = Non
             "file_mode": cfg.file_mode,
         },
         "lftp": {"limit_rate": cfg.lftp_limit_rate, "parallel": cfg.lftp_parallel},
+        "files": {
+            "video_ext": cfg.video_ext,
+            "sub_ext": cfg.sub_ext,
+            "skip_patterns": cfg.skip_patterns,
+        },
         "staging_root": cfg.staging_root,
     }
     return {"job_spec": spec, "dest_path": dest_path, "collision": os.path.exists(dest_path)}

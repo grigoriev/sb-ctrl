@@ -8,11 +8,28 @@ from __future__ import annotations
 
 import os
 import tomllib
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 DEFAULT_CONFIG_PATH = Path.home() / ".config" / "sb-ctrl" / "config.toml"
+
+DEFAULT_VIDEO_EXT = [".mkv", ".mp4", ".avi", ".m4v", ".mov", ".ts"]
+DEFAULT_SUB_EXT = [".srt", ".ass", ".sub"]
+DEFAULT_SKIP_PATTERNS = ["sample"]
+
+
+def _norm_ext(items: Any) -> list[str]:
+    """Lowercase each extension and ensure a leading dot."""
+    out = []
+    for raw in items:
+        ext = str(raw).lower().strip()
+        out.append(ext if ext.startswith(".") else f".{ext}")
+    return out
+
+
+def _norm_patterns(items: Any) -> list[str]:
+    return [str(p).lower() for p in items]
 
 
 @dataclass(frozen=True)
@@ -35,6 +52,9 @@ class Config:
     dir_mode: str = "775"
     file_mode: str = "664"
     movie_layout: str = "folder"
+    video_ext: list[str] = field(default_factory=lambda: list(DEFAULT_VIDEO_EXT))
+    sub_ext: list[str] = field(default_factory=lambda: list(DEFAULT_SUB_EXT))
+    skip_patterns: list[str] = field(default_factory=lambda: list(DEFAULT_SKIP_PATTERNS))
     lftp_limit_rate: str = ""
     lftp_parallel: int = 1
     staging_root: str = ""
@@ -60,6 +80,7 @@ def from_dict(data: dict[str, Any]) -> Config:
     roots = data.get("roots", {})
     perms = data.get("perms", {})
     layout = data.get("layout", {})
+    files = data.get("files", {})
     lftp = data.get("lftp", {})
     api = data.get("api", {})
     return Config(
@@ -79,6 +100,9 @@ def from_dict(data: dict[str, Any]) -> Config:
         dir_mode=str(perms.get("dir_mode", base.dir_mode)),
         file_mode=str(perms.get("file_mode", base.file_mode)),
         movie_layout=layout.get("movie", base.movie_layout),
+        video_ext=_norm_ext(files.get("video_ext", base.video_ext)),
+        sub_ext=_norm_ext(files.get("sub_ext", base.sub_ext)),
+        skip_patterns=_norm_patterns(files.get("skip_patterns", base.skip_patterns)),
         lftp_limit_rate=lftp.get("limit_rate", base.lftp_limit_rate),
         lftp_parallel=int(lftp.get("parallel", base.lftp_parallel)),
         staging_root=data.get("staging_root", base.staging_root),

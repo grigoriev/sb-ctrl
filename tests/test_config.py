@@ -84,3 +84,19 @@ def test_as_dict_keeps_empty_secrets() -> None:
     data = Config().as_dict()
     assert data["rtorrent_pass"] == ""
     assert data["tmdb_key"] == ""
+
+
+def test_files_defaults() -> None:
+    cfg = Config()
+    assert ".mkv" in cfg.video_ext
+    assert ".srt" in cfg.sub_ext
+    assert cfg.skip_patterns == ["sample"]
+
+
+def test_files_section_normalizes() -> None:
+    cfg = from_dict(
+        {"files": {"video_ext": ["MKV", ".WebM"], "sub_ext": ["SRT"], "skip_patterns": ["Sample", "PROOF"]}}
+    )
+    assert cfg.video_ext == [".mkv", ".webm"]
+    assert cfg.sub_ext == [".srt"]
+    assert cfg.skip_patterns == ["sample", "proof"]

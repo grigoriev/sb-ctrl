@@ -28,3 +28,28 @@ def test_episode_targets_places_videos_and_subs(tmp_path: Path) -> None:
     assert targets["Show.S01E02.mkv"] == "/lib/Show (2020)/Season 01/S01E02.mkv"
     assert "sample.mkv" not in targets
     assert "readme.nfo" not in targets
+
+
+def test_episode_targets_honors_configured_patterns(tmp_path: Path) -> None:
+    pack = tmp_path / "pack"
+    pack.mkdir()
+    (pack / "Show.S01E01.webm").write_text("v")
+    (pack / "Show.S01E02.mkv").write_text("v")
+    (pack / "Show.S01E03.PROOF.webm").write_text("junk")
+
+    targets = {
+        src.name: dest
+        for src, dest in episode_targets(pack, "/lib/Show", video_ext=["webm"], sub_ext=[], skip_patterns=["proof"])
+    }
+    assert targets["Show.S01E01.webm"] == "/lib/Show/Season 01/S01E01.webm"
+    assert "Show.S01E02.mkv" not in targets  # mkv is not in the configured video_ext
+    assert "Show.S01E03.PROOF.webm" not in targets  # matches a skip pattern
+
+
+def test_episode_targets_custom_subtitle_ext(tmp_path: Path) -> None:
+    pack = tmp_path / "pack"
+    pack.mkdir()
+    (pack / "Show.S01E01.en.vtt").write_text("s")
+
+    targets = {src.name: dest for src, dest in episode_targets(pack, "/lib/Show", video_ext=[], sub_ext=["vtt"])}
+    assert targets["Show.S01E01.en.vtt"] == "/lib/Show/Season 01/S01E01.en.vtt"
