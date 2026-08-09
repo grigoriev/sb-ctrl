@@ -36,6 +36,7 @@ def _build_parser() -> argparse.ArgumentParser:
     rj.add_argument("job_id")
     rt = sub.add_parser("retry", help="Re-run a failed job")
     rt.add_argument("job_id")
+    sub.add_parser("serve", help="Run the REST API server")
     return parser
 
 
@@ -91,6 +92,16 @@ def _cmd_retry(job_id: str) -> dict[str, Any]:
     return {"job_id": job_id, "launcher": mode}
 
 
+def _cmd_serve() -> dict[str, Any]:  # pragma: no cover - runs a blocking server
+    import uvicorn
+
+    from sb_ctrl.api import app
+
+    cfg = load_config()
+    uvicorn.run(app, host=cfg.api_host, port=cfg.api_port)
+    return {"ok": True}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -107,6 +118,8 @@ def main(argv: list[str] | None = None) -> int:
             payload = _cmd_run(sys.stdin)
         elif args.command == "run-job":
             payload = _cmd_run_job(args.job_id)
+        elif args.command == "serve":
+            payload = _cmd_serve()
         else:
             payload = _cmd_retry(args.job_id)
     except Exception as exc:  # noqa: BLE001 - surface any failure as JSON to the caller

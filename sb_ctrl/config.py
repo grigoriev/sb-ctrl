@@ -38,11 +38,14 @@ class Config:
     lftp_limit_rate: str = ""
     lftp_parallel: int = 1
     staging_root: str = ""
+    api_host: str = "127.0.0.1"
+    api_port: int = 8765
+    api_token: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         """Return the config as a plain dict, with secrets redacted."""
         data = asdict(self)
-        for secret in ("rtorrent_pass", "tmdb_key"):
+        for secret in ("rtorrent_pass", "tmdb_key", "api_token"):
             if data[secret]:
                 data[secret] = "***"
         return data
@@ -58,6 +61,7 @@ def from_dict(data: dict[str, Any]) -> Config:
     perms = data.get("perms", {})
     layout = data.get("layout", {})
     lftp = data.get("lftp", {})
+    api = data.get("api", {})
     return Config(
         rtorrent_url=rt.get("url", base.rtorrent_url),
         rtorrent_user=rt.get("user", base.rtorrent_user),
@@ -78,6 +82,9 @@ def from_dict(data: dict[str, Any]) -> Config:
         lftp_limit_rate=lftp.get("limit_rate", base.lftp_limit_rate),
         lftp_parallel=int(lftp.get("parallel", base.lftp_parallel)),
         staging_root=data.get("staging_root", base.staging_root),
+        api_host=api.get("host", base.api_host),
+        api_port=int(api.get("port", base.api_port)),
+        api_token=api.get("token", base.api_token),
     )
 
 
