@@ -14,26 +14,30 @@ def test_argv_builders() -> None:
         "run-job",
         "J1",
     ]
-    assert launcher.nohup_argv("J1") == ["nohup", "sb-ctrl", "run-job", "J1"]
+    assert launcher.worker_argv("J1") == ["sb-ctrl", "run-job", "J1"]
 
 
 def test_launch_uses_systemd_when_it_succeeds() -> None:
     calls: list[list[str]] = []
+    spawned: list[list[str]] = []
 
     def runner(argv: list[str]) -> int:
         calls.append(argv)
         return 0
 
-    assert launcher.launch("J1", runner) == "systemd"
+    assert launcher.launch("J1", runner, spawned.append) == "systemd"
     assert calls == [launcher.systemd_argv("J1")]
+    assert spawned == []
 
 
-def test_launch_falls_back_to_nohup() -> None:
+def test_launch_spawns_detached_when_systemd_absent() -> None:
     calls: list[list[str]] = []
+    spawned: list[list[str]] = []
 
     def runner(argv: list[str]) -> int:
         calls.append(argv)
-        return 0 if argv[0] == "nohup" else 1
+        return 127
 
-    assert launcher.launch("J1", runner) == "nohup"
-    assert calls == [launcher.systemd_argv("J1"), launcher.nohup_argv("J1")]
+    assert launcher.launch("J1", runner, spawned.append) == "spawn"
+    assert calls == [launcher.systemd_argv("J1")]
+    assert spawned == [launcher.worker_argv("J1")]
