@@ -17,9 +17,22 @@ The full design is in [SPEC.md](SPEC.md).
 ## REST API
 
 `sb-ctrl serve` runs the API (uvicorn); `/docs` serves the OpenAPI schema. Every
-route except `/health` needs `Authorization: Bearer <token>`.
+route except `/health`, `/me` and `/login` needs proof of identity, and there are
+two kinds. Scripts send `Authorization: Bearer <token>` from `[api] token`. A
+browser posts to `/login` and gets a signed session cookie, from `[auth]`.
+
+Set up the login once:
+
+```sh
+sb-ctrl hash-password        # prompts, prints a password_hash and a secret
+```
+
+Put both in `[auth]` together with the user name. Without that section a browser
+has no way in, and only the bearer token opens the API.
 
 ```
+GET  /me                  whether a login is needed, and who is logged in
+POST /login, /logout      start and end a browser session
 GET  /torrents            completed torrents (newest first)
 POST /plan                preview a transfer for a torrent + kind
 POST /jobs                create and launch a transfer

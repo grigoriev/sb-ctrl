@@ -168,3 +168,27 @@ def test_retry_resets_state_and_launches(
     assert cli.main(["retry", "J9"]) == 0
     assert json.loads(capsys.readouterr().out)["job_id"] == "J9"
     assert read_state(job)["state"] == "queued"
+
+
+def test_hash_password_reads_stdin(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr("sys.stdin", io.StringIO("correct horse\n"))
+    assert cli.main(["hash-password", "--stdin"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["password_hash"].startswith("scrypt$")
+    assert payload["secret"]
+
+
+def test_hash_password_refuses_an_empty_one(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr("sys.stdin", io.StringIO("  \n"))
+    assert cli.main(["hash-password", "--stdin"]) == 1
+    assert "empty password" in capsys.readouterr().err
+
+
+def test_hash_password_prompts_without_stdin(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr("getpass.getpass", lambda *_: "typed at the prompt")
+    assert cli.main(["hash-password"]) == 0
+    assert json.loads(capsys.readouterr().out)["password_hash"].startswith("scrypt$")
