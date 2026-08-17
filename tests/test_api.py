@@ -139,3 +139,97 @@ def test_config_redacts(tmp_path: Path) -> None:
     body = resp.json()
     assert body["api_token"] == "***"
     assert body["tmdb_key"] == "***"
+
+
+# --- login ---------------------------------------------------------------
+
+PASSWORD = "correct horse"
+
+
+def _login_cfg(**extra: object) -> Config:
+    from sb_ctrl import auth
+
+    return Config(
+        auth_user="sergey",
+        auth_password_hash=auth.hash_password(PASSWORD),
+        auth_secret="signing-key",
+        **extra,  # type: ignore[arg-type]
+    )
+
+
+def _tls_client(cfg: Config) -> TestClient:
+    """The session cookie is Secure, so a client must speak https to keep it."""
+    app = api.create_app()
+    app.dependency_overrides[api.get_config] = lambda: cfg
+    return TestClient(app, base_url="https://testserver")
+
+
+def test_login_sets_a_session_and_opens_the_api() -> None:
+    client = _tls_client(_login_cfg())
+    assert client.get("/config").status_code == 401
+
+    resp = client.post("/login", json={"user": "sergey", "password": PASSWORD})
+    assert resp.status_code == 200
+    assert resp.json()["user"] == "sergey"
+
+    cookie = client.cookies.get("sb_session")
+    assert cookie
+    assert client.get("/config").status_code == 200
+
+
+def test_login_rejects_a_wrong_password() -> None:
+    client = _tls_client(_login_cfg())
+    resp = client.post("/login", json={"user": "sergey", "password": "nope"})
+    assert resp.status_code == 401
+    assert client.cookies.get("sb_session") is None
+
+
+def test_login_rejects_a_wrong_user() -> None:
+    client = _tls_client(_login_cfg())
+    assert client.post("/login", json={"user": "someone", "password": PASSWORD}).status_code == 401
+
+
+def test_login_without_configuration_is_refused() -> None:
+    client = _client(Config())
+    resp = client.post("/login", json={"user": "sergey", "password": PASSWORD})
+    assert resp.status_code == 400
+
+
+def test_logout_clears_the_session() -> None:
+    client = _tls_client(_login_cfg())
+    client.post("/login", json={"user": "sergey", "password": PASSWORD})
+    assert client.get("/config").status_code == 200
+    client.post("/logout")
+    assert client.get("/config").status_code == 401
+
+
+def test_a_forged_cookie_is_refused() -> None:
+    client = _tls_client(_login_cfg())
+    client.cookies.set("sb_session", "c2VyZ2V5.9999999999.deadbeef")
+    assert client.get("/config").status_code == 401
+
+
+def test_the_bearer_token_still_works_beside_a_login() -> None:
+    client = _tls_client(_login_cfg(api_token="secret"))
+    assert client.get("/config", headers={"Authorization": "Bearer secret"}).status_code == 200
+
+
+def test_me_reports_whether_a_login_is_needed() -> None:
+    client = _tls_client(_login_cfg())
+    body = client.get("/me").json()
+    assert body == {"login_required": True, "user": None}
+
+    client.post("/login", json={"user": "sergey", "password": PASSWORD})
+    assert client.get("/me").json() == {"login_required": False, "user": "sergey"}
+
+
+def test_me_on_an_open_install() -> None:
+    assert _client(Config()).get("/me").json() == {"login_required": False, "user": None}
+
+
+def test_config_redacts_the_login_secrets() -> None:
+    client = _tls_client(_login_cfg())
+    client.post("/login", json={"user": "sergey", "password": PASSWORD})
+    body = client.get("/config").json()
+    assert body["auth_password_hash"] == "***"
+    assert body["auth_secret"] == "***"

@@ -61,11 +61,15 @@ class Config:
     api_host: str = "127.0.0.1"
     api_port: int = 8765
     api_token: str = ""
+    auth_user: str = ""
+    auth_password_hash: str = ""
+    auth_secret: str = ""
+    auth_ttl_hours: int = 720
 
     def as_dict(self) -> dict[str, Any]:
         """Return the config as a plain dict, with secrets redacted."""
         data = asdict(self)
-        for secret in ("rtorrent_pass", "tmdb_key", "api_token"):
+        for secret in ("rtorrent_pass", "tmdb_key", "api_token", "auth_password_hash", "auth_secret"):
             if data[secret]:
                 data[secret] = "***"
         return data
@@ -83,6 +87,7 @@ def from_dict(data: dict[str, Any]) -> Config:
     files = data.get("files", {})
     lftp = data.get("lftp", {})
     api = data.get("api", {})
+    auth = data.get("auth", {})
     return Config(
         rtorrent_url=rt.get("url", base.rtorrent_url),
         rtorrent_user=rt.get("user", base.rtorrent_user),
@@ -109,6 +114,10 @@ def from_dict(data: dict[str, Any]) -> Config:
         api_host=api.get("host", base.api_host),
         api_port=int(api.get("port", base.api_port)),
         api_token=api.get("token", base.api_token),
+        auth_user=auth.get("user", base.auth_user),
+        auth_password_hash=auth.get("password_hash", base.auth_password_hash),
+        auth_secret=auth.get("secret", base.auth_secret),
+        auth_ttl_hours=int(auth.get("ttl_hours", base.auth_ttl_hours)),
     )
 
 

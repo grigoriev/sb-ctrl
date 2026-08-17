@@ -8,13 +8,14 @@ React UI) talk to this API; TLS is terminated by a reverse proxy in front.
 from __future__ import annotations
 
 import dataclasses
+import hmac
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Response
 from pydantic import BaseModel
 
-from sb_ctrl import __version__, launcher, planner, tmdb
+from sb_ctrl import __version__, auth, launcher, planner, tmdb
 from sb_ctrl.config import Config, load_config
 from sb_ctrl.jobs import create_job, jobs_dir, list_jobs, read_state, write_state
 from sb_ctrl.rtorrent import RTorrent
@@ -29,6 +30,11 @@ def _find_job(cfg: Config, job_id: str) -> Path | None:
     if not root.is_dir():
         return None
     return next((e for e in root.iterdir() if e.name == job_id and e.is_dir()), None)
+
+
+class LoginRequest(BaseModel):
+    user: str
+    password: str
 
 
 class PlanRequest(BaseModel):
@@ -55,16 +61,29 @@ def _client(cfg: Config) -> RTorrent:
 ConfigDep = Annotated[Config, Depends(get_config)]
 
 
-def require_token(cfg: ConfigDep, authorization: Annotated[str | None, Header()] = None) -> None:
-    """Reject the request unless it carries the configured bearer token.
+def login_configured(cfg: Config) -> bool:
+    """True once a user, a password hash and a signing secret are all set."""
+    return bool(cfg.auth_user and cfg.auth_password_hash and cfg.auth_secret)
 
-    When no token is configured (fresh install) the API is open, so setup works
-    before a token is set.
+
+def require_token(
+    cfg: ConfigDep,
+    authorization: Annotated[str | None, Header()] = None,
+    sb_session: Annotated[str | None, Cookie()] = None,
+) -> None:
+    """Reject the request unless it proves who it is.
+
+    Two ways in: the bearer token, which scripts and the Alfred workflow use,
+    and the session cookie a browser gets from /login. When neither is
+    configured (fresh install) the API is open, so setup works before then.
     """
-    if not cfg.api_token:
+    if cfg.api_token and authorization == f"Bearer {cfg.api_token}":
         return
-    if authorization != f"Bearer {cfg.api_token}":
-        raise HTTPException(status_code=401, detail="unauthorized")
+    if login_configured(cfg) and sb_session and auth.session_user(cfg.auth_secret, sb_session):
+        return
+    if not cfg.api_token and not login_configured(cfg):
+        return
+    raise HTTPException(status_code=401, detail="unauthorized")
 
 
 AuthDep = Depends(require_token)
@@ -76,6 +95,36 @@ def create_app() -> FastAPI:
     @app.get("/health")
     def health() -> dict[str, Any]:
         return {"ok": True, "version": __version__}
+
+    @app.get("/me")
+    def me(cfg: ConfigDep, sb_session: Annotated[str | None, Cookie()] = None) -> dict[str, Any]:
+        """What the UI needs to decide between a login form and the app."""
+        user = auth.session_user(cfg.auth_secret, sb_session) if login_configured(cfg) and sb_session else None
+        return {"login_required": login_configured(cfg) and user is None, "user": user}
+
+    @app.post("/login", responses={401: {"description": "bad credentials"}})
+    def login(req: LoginRequest, response: Response, cfg: ConfigDep) -> dict[str, Any]:
+        if not login_configured(cfg):
+            raise HTTPException(status_code=400, detail="login not configured")
+        ok = hmac.compare_digest(req.user, cfg.auth_user) and auth.verify_password(req.password, cfg.auth_password_hash)
+        if not ok:
+            raise HTTPException(status_code=401, detail="bad credentials")
+        ttl = cfg.auth_ttl_hours * 3600
+        response.set_cookie(
+            auth.COOKIE_NAME,
+            auth.issue_session(cfg.auth_secret, cfg.auth_user, ttl),
+            max_age=ttl,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            path="/",
+        )
+        return {"user": cfg.auth_user}
+
+    @app.post("/logout")
+    def logout(response: Response) -> dict[str, Any]:
+        response.delete_cookie(auth.COOKIE_NAME, path="/")
+        return {"ok": True}
 
     @app.get("/torrents", dependencies=[AuthDep])
     def torrents(cfg: ConfigDep) -> dict[str, Any]:

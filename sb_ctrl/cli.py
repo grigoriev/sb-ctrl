@@ -10,12 +10,14 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import getpass
 import json
 import os
+import secrets
 import sys
 from typing import IO, Any
 
-from sb_ctrl import __version__, launcher, planner, tmdb, worker
+from sb_ctrl import __version__, auth, launcher, planner, tmdb, worker
 from sb_ctrl.config import Config, load_config
 from sb_ctrl.jobs import create_job, jobs_dir, list_jobs, write_state
 from sb_ctrl.rtorrent import RTorrent
@@ -38,6 +40,8 @@ def _build_parser() -> argparse.ArgumentParser:
     rj.add_argument("job_id")
     rt = sub.add_parser("retry", help="Re-run a failed job")
     rt.add_argument("job_id")
+    hp = sub.add_parser("hash-password", help="Hash a password for [auth] in the config")
+    hp.add_argument("--stdin", action="store_true", help="Read the password from stdin, not a prompt")
     sub.add_parser("serve", help="Run the REST API server")
     return parser
 
@@ -105,6 +109,14 @@ def _cmd_retry(job_id: str) -> dict[str, Any]:
     return {"job_id": job_id, "launcher": mode}
 
 
+def _cmd_hash_password(stream: IO[str], from_stdin: bool) -> dict[str, Any]:
+    """Hash a password so it never has to be stored, typed or logged in clear."""
+    password = stream.read().strip() if from_stdin else getpass.getpass("Password: ")
+    if not password:
+        raise ValueError("empty password")
+    return {"password_hash": auth.hash_password(password), "secret": secrets.token_urlsafe(32)}
+
+
 def _cmd_serve() -> dict[str, Any]:  # pragma: no cover - runs a blocking server
     import uvicorn
 
@@ -133,6 +145,8 @@ def main(argv: list[str] | None = None) -> int:
             payload = _cmd_run(sys.stdin)
         elif args.command == "run-job":
             payload = _cmd_run_job(args.job_id)
+        elif args.command == "hash-password":
+            payload = _cmd_hash_password(sys.stdin, args.stdin)
         elif args.command == "serve":
             payload = _cmd_serve()
         else:
