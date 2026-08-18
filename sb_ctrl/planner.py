@@ -50,6 +50,7 @@ def plan(cfg: Config, torrent: dict[str, Any], kind: str, name: str | None = Non
         "mode": mode,
         "source": {
             "host": cfg.sftp_host,
+            "user": cfg.sftp_user,
             "base_rel": base_rel,
             "is_multi": is_multi,
             "size": int(torrent["size"]),

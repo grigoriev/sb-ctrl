@@ -44,6 +44,7 @@ def default_transfer(spec: dict[str, Any], item: Path, progress: ProgressCb) -> 
         str(item),
         spec["lftp"].get("limit_rate", ""),
         int(spec["lftp"].get("parallel", 1)),
+        src.get("user", ""),
     )
     subprocess.check_call(argv)
     progress(100, "", "")
