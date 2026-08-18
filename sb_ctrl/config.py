@@ -40,6 +40,7 @@ class Config:
     rtorrent_user: str = ""
     rtorrent_pass: str = ""
     sftp_host: str = "sb.g7v.io"
+    sftp_user: str = ""
     sftp_base: str = "files"
     tmdb_key: str = ""
     tmdb_lang: str = "en-US"
@@ -93,6 +94,7 @@ def from_dict(data: dict[str, Any]) -> Config:
         rtorrent_user=rt.get("user", base.rtorrent_user),
         rtorrent_pass=rt.get("pass", base.rtorrent_pass),
         sftp_host=sftp.get("host", base.sftp_host),
+        sftp_user=sftp.get("user", base.sftp_user),
         sftp_base=sftp.get("base", base.sftp_base),
         tmdb_key=tmdb.get("key", base.tmdb_key),
         tmdb_lang=tmdb.get("lang", base.tmdb_lang),

@@ -10,6 +10,7 @@ pass = "CHANGE_ME"
 
 [sftp]
 host = "sb.g7v.io"
+user = ""                         # ssh user on the seedbox; leave empty to use the local one
 base = "files"                    # remote dir that rTorrent base paths live under
 
 [tmdb]

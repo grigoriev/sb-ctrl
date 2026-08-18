@@ -100,3 +100,8 @@ def test_files_section_normalizes() -> None:
     assert cfg.video_ext == [".mkv", ".webm"]
     assert cfg.sub_ext == [".srt"]
     assert cfg.skip_patterns == ["sample", "proof"]
+
+
+def test_sftp_user_is_read() -> None:
+    cfg = from_dict({"sftp": {"host": "h", "user": "u"}})
+    assert (cfg.sftp_host, cfg.sftp_user) == ("h", "u")
