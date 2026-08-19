@@ -111,23 +111,45 @@ def pid_alive(pid: int) -> bool:
     return True
 
 
-def reconcile(staging_root: str) -> None:
-    """Mark every active job whose worker is gone as stalled.
+def _mark_if_stalled(job_dir: Path, state: dict[str, Any]) -> None:
+    """Move an active job with no live worker to stalled.
 
     A worker dies with its container, and nothing else would ever move the
     job off ``active``: the list would show a frozen bar, and the job could
     be neither deleted nor understood.
     """
+    if state.get("state") != "active" or pid_alive(int(state.get("pid", 0))):
+        return
+    write_state(
+        job_dir,
+        state="stalled",
+        error="the worker stopped before the transfer finished",
+        rate="",
+        eta="",
+    )
+
+
+def _backfill_summary(job_dir: Path, state: dict[str, Any]) -> None:
+    """Give a job written by an older version the fields a client now reads.
+
+    The plan beside it holds them all along, so a job from before this
+    release still shows its release name and links to its torrent.
+    """
+    if "release" in state:
+        return
+    try:
+        spec = read_spec(job_dir)
+    except OSError, json.JSONDecodeError:
+        return
+    write_state(job_dir, **summary(spec))
+
+
+def reconcile(staging_root: str) -> None:
+    """Bring the stored job states up to date before a client reads them."""
     for state in list_jobs(staging_root):
-        if state.get("state") != "active" or pid_alive(int(state.get("pid", 0))):
-            continue
-        write_state(
-            jobs_dir(staging_root) / str(state["id"]),
-            state="stalled",
-            error="the worker stopped before the transfer finished",
-            rate="",
-            eta="",
-        )
+        job_dir = jobs_dir(staging_root) / str(state["id"])
+        _backfill_summary(job_dir, state)
+        _mark_if_stalled(job_dir, state)
 
 
 def read_state(job_dir: Path) -> dict[str, Any]:
