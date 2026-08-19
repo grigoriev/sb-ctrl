@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 from sb_ctrl import __version__, auth, launcher, planner, tmdb
 from sb_ctrl.config import Config, load_config
-from sb_ctrl.jobs import create_job, jobs_dir, list_jobs, read_state, write_state
+from sb_ctrl.jobs import create_job, delete_job, jobs_dir, list_jobs, read_state, write_state
 from sb_ctrl.rtorrent import RTorrent
 
 _NOT_FOUND = "job not found"
@@ -176,6 +176,22 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail=_NOT_FOUND)
         write_state(job_dir, state="queued", error="", pct=0)
         return {"job_id": job_dir.name, "launcher": launcher.launch(job_dir.name)}
+
+    @app.delete(
+        "/jobs/{job_id}",
+        dependencies=[AuthDep],
+        responses={404: {"description": _NOT_FOUND}, 409: {"description": "job is running"}},
+    )
+    def remove(job_id: str, cfg: ConfigDep) -> dict[str, Any]:
+        """Drop a finished or failed job from the list, staging leftovers too."""
+        job_dir = _find_job(cfg, job_id)
+        if job_dir is None:
+            raise HTTPException(status_code=404, detail=_NOT_FOUND)
+        state = read_state(job_dir).get("state") if (job_dir / "state.json").is_file() else None
+        if state == "active":
+            raise HTTPException(status_code=409, detail="job is running")
+        delete_job(cfg.staging_root, job_dir)
+        return {"deleted": job_id}
 
     @app.get("/config", dependencies=[AuthDep])
     def config(cfg: ConfigDep) -> dict[str, Any]:

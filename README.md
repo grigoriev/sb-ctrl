@@ -37,6 +37,7 @@ GET  /torrents            completed torrents (newest first)
 POST /plan                preview a transfer for a torrent + kind
 POST /jobs                create and launch a transfer
 GET  /jobs, /jobs/{id}    job state / progress
+DELETE /jobs/{id}         drop a finished or failed job, staging leftovers too
 POST /jobs/{id}/retry     re-run a failed job
 GET  /config              effective config (secrets redacted)
 ```

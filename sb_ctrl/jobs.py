@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import shutil
 import time
 from pathlib import Path
 from typing import Any
@@ -60,6 +61,17 @@ def write_state(job_dir: Path, **fields: Any) -> None:
 def read_state(job_dir: Path) -> dict[str, Any]:
     data: dict[str, Any] = json.loads((job_dir / "state.json").read_text())
     return data
+
+
+def delete_job(staging_root: str, job_dir: Path) -> None:
+    """Remove a job and whatever it left in staging.
+
+    Staging is named after the job, so a half-finished pull goes with it and
+    does not sit on the disk forever.
+    """
+    staging = Path(staging_root) / ".staging" / job_dir.name
+    shutil.rmtree(staging, ignore_errors=True)
+    shutil.rmtree(job_dir, ignore_errors=True)
 
 
 def list_jobs(staging_root: str) -> list[dict[str, Any]]:

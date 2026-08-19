@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from sb_ctrl import api, launcher, tmdb
 from sb_ctrl.config import Config
-from sb_ctrl.jobs import create_job
+from sb_ctrl.jobs import create_job, jobs_dir, write_state
 from sb_ctrl.rtorrent import Torrent
 from sb_ctrl.tmdb import Candidate
 
@@ -233,3 +233,46 @@ def test_config_redacts_the_login_secrets() -> None:
     body = client.get("/config").json()
     assert body["auth_password_hash"] == "***"
     assert body["auth_secret"] == "***"
+
+
+# --- deleting a job ------------------------------------------------------
+
+
+def test_delete_removes_the_job_and_its_staging(tmp_path: Path) -> None:
+    cfg = Config(staging_root=str(tmp_path))
+    job = create_job(str(tmp_path), {"name": "x"})
+    write_state(job, state="failed", error="boom")
+    staging = tmp_path / ".staging" / job.name
+    staging.mkdir(parents=True)
+    (staging / "half.mkv").write_bytes(b"x" * 5)
+
+    resp = _client(cfg).delete(f"/jobs/{job.name}")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"deleted": job.name}
+    assert not job.exists()
+    assert not staging.exists()
+
+
+def test_delete_refuses_a_running_job(tmp_path: Path) -> None:
+    cfg = Config(staging_root=str(tmp_path))
+    job = create_job(str(tmp_path), {"name": "x"})
+    write_state(job, state="active", pct=42)
+
+    resp = _client(cfg).delete(f"/jobs/{job.name}")
+
+    assert resp.status_code == 409
+    assert job.exists()
+
+
+def test_delete_reports_an_unknown_job(tmp_path: Path) -> None:
+    cfg = Config(staging_root=str(tmp_path))
+    jobs_dir(str(tmp_path)).mkdir(parents=True)
+    assert _client(cfg).delete("/jobs/nope").status_code == 404
+
+
+def test_delete_a_job_that_never_wrote_a_state(tmp_path: Path) -> None:
+    cfg = Config(staging_root=str(tmp_path))
+    job = create_job(str(tmp_path), {"name": "x"})
+    (job / "state.json").unlink(missing_ok=True)
+    assert _client(cfg).delete(f"/jobs/{job.name}").status_code == 200
