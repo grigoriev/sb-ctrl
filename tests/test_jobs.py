@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from sb_ctrl.jobs import create_job, list_jobs, read_spec, read_state, write_state
+from sb_ctrl.jobs import create_job, list_jobs, read_spec, read_state, summary, write_state
 
 
 def test_empty_staging_root_returns_nothing() -> None:
@@ -33,7 +33,29 @@ def test_create_job_writes_spec_and_state(tmp_path: Path) -> None:
     assert spec["name"] == "X"
     assert spec["id"] == "J1"
     state = read_state(job)
-    assert state == {"id": "J1", "name": "X", "state": "queued", "pct": 0}
+    assert state["id"] == "J1"
+    assert state["name"] == "X"
+    assert state["state"] == "queued"
+    assert state["pct"] == 0
+    assert state["created"] > 0
+
+
+def test_create_job_records_what_the_list_shows(tmp_path: Path) -> None:
+    spec = {
+        "name": "1670 (2023)",
+        "kind": "series",
+        "dest_path": "/media/series/1670 (2023)",
+        "source": {"base_rel": "files/1670.S03.WEB-DL.1080p", "size": 17_000_000_000},
+    }
+    state = read_state(create_job(str(tmp_path), spec, job_id="J3"))
+    assert state["release"] == "1670.S03.WEB-DL.1080p"
+    assert state["kind"] == "series"
+    assert state["size"] == 17_000_000_000
+    assert state["dest"] == "/media/series/1670 (2023)"
+
+
+def test_summary_of_a_bare_spec_is_empty() -> None:
+    assert summary({}) == {"kind": "", "release": "", "size": 0, "dest": ""}
 
 
 def test_write_state_merges_and_keeps_identity(tmp_path: Path) -> None:

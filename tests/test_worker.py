@@ -111,7 +111,10 @@ def test_series_pack_lays_out_episodes(tmp_path: Path) -> None:
     assert (season / "S01E01.mkv").is_file()
     assert (season / "S01E02.mkv").is_file()
     assert (season / "S01E01.en.srt").is_file()
-    assert read_state(job)["state"] == "done"
+    state = read_state(job)
+    assert state["state"] == "done"
+    assert state["seasons"] == [{"season": 1, "episodes": 2}]
+    assert state["finished"] > 0
 
 
 def test_failure_records_error(tmp_path: Path) -> None:
@@ -170,3 +173,18 @@ def test_transfer_progress_says_nothing_before_the_first_bytes() -> None:
     assert worker.transfer_progress(0, 1000, 1.0) == (0, "", "")
     assert worker.transfer_progress(500, 0, 1.0) == (0, "", "")
     assert worker.transfer_progress(500, 1000, 0.0) == (0, "", "")
+
+
+def test_season_summary_counts_episodes_not_files() -> None:
+    targets = [
+        (Path("a"), "/lib/Show/Season 01/S01E01.mkv"),
+        (Path("b"), "/lib/Show/Season 01/S01E01.en.srt"),
+        (Path("c"), "/lib/Show/Season 01/S01E02.mkv"),
+        (Path("d"), "/lib/Show/Season 02/S02E01.mkv"),
+        (Path("e"), "/lib/Show/extras/readme.txt"),
+    ]
+    assert worker.season_summary(targets) == [{"season": 1, "episodes": 2}, {"season": 2, "episodes": 1}]
+
+
+def test_season_summary_of_nothing_is_empty() -> None:
+    assert worker.season_summary([]) == []
