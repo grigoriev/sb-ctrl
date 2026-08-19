@@ -21,6 +21,9 @@ from sb_ctrl.jobs import create_job, delete_job, jobs_dir, list_jobs, read_state
 from sb_ctrl.rtorrent import RTorrent
 
 _NOT_FOUND = "job not found"
+_NO_TORRENT = "torrent not found"
+_JOB_ERRORS: dict[int | str, dict[str, Any]] = {404: {"description": _NOT_FOUND}}
+_TORRENT_ERRORS: dict[int | str, dict[str, Any]] = {404: {"description": _NO_TORRENT}}
 
 
 def _find_job(cfg: Config, job_id: str) -> Path | None:
@@ -89,9 +92,23 @@ def require_token(
 AuthDep = Depends(require_token)
 
 
-def create_app() -> FastAPI:
-    app = FastAPI(title="sb-ctrl", version=__version__)
+def _torrent_or_404(cfg: Config, torrent_hash: str) -> dict[str, Any]:
+    """The completed torrent behind ``torrent_hash``, as a plain dict."""
+    match = next((t for t in _client(cfg).list_completed() if t.hash == torrent_hash), None)
+    if match is None:
+        raise HTTPException(status_code=404, detail=_NO_TORRENT)
+    return dataclasses.asdict(match)
 
+
+def _job_dir_or_404(cfg: Config, job_id: str) -> Path:
+    """The job directory for ``job_id``, or a 404 when nothing matches."""
+    job_dir = _find_job(cfg, job_id)
+    if job_dir is None:
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
+    return job_dir
+
+
+def _add_session_routes(app: FastAPI) -> None:
     @app.get("/health")
     def health() -> dict[str, Any]:
         return {"ok": True, "version": __version__}
@@ -126,6 +143,8 @@ def create_app() -> FastAPI:
         response.delete_cookie(auth.COOKIE_NAME, path="/")
         return {"ok": True}
 
+
+def _add_library_routes(app: FastAPI) -> None:
     @app.get("/torrents", dependencies=[AuthDep])
     def torrents(cfg: ConfigDep) -> dict[str, Any]:
         return {"items": [dataclasses.asdict(t) for t in _client(cfg).list_completed()]}
@@ -138,19 +157,19 @@ def create_app() -> FastAPI:
             "candidates": [{**dataclasses.asdict(c), "kind": c.kind} for c in result["candidates"]],
         }
 
-    @app.post("/plan", dependencies=[AuthDep], responses={404: {"description": "torrent not found"}})
+    @app.post("/plan", dependencies=[AuthDep], responses=_TORRENT_ERRORS)
     def plan(req: PlanRequest, cfg: ConfigDep) -> dict[str, Any]:
-        match = next((t for t in _client(cfg).list_completed() if t.hash == req.hash), None)
-        if match is None:
-            raise HTTPException(status_code=404, detail="torrent not found")
-        return planner.plan(cfg, dataclasses.asdict(match), req.kind, req.name)
+        return planner.plan(cfg, _torrent_or_404(cfg, req.hash), req.kind, req.name)
 
-    @app.post("/jobs", dependencies=[AuthDep], responses={404: {"description": "torrent not found"}})
+    @app.get("/config", dependencies=[AuthDep])
+    def config(cfg: ConfigDep) -> dict[str, Any]:
+        return cfg.as_dict()
+
+
+def _add_job_routes(app: FastAPI) -> None:
+    @app.post("/jobs", dependencies=[AuthDep], responses=_TORRENT_ERRORS)
     def create(req: RunRequest, cfg: ConfigDep) -> dict[str, Any]:
-        match = next((t for t in _client(cfg).list_completed() if t.hash == req.hash), None)
-        if match is None:
-            raise HTTPException(status_code=404, detail="torrent not found")
-        result = planner.plan(cfg, dataclasses.asdict(match), req.kind, req.name)
+        result = planner.plan(cfg, _torrent_or_404(cfg, req.hash), req.kind, req.name)
         if result["collision"] and req.collision != "overwrite":
             return {"skipped": True, "dest_path": result["dest_path"]}
         job = create_job(cfg.staging_root, result["job_spec"])
@@ -160,20 +179,16 @@ def create_app() -> FastAPI:
     def jobs(cfg: ConfigDep) -> dict[str, Any]:
         return {"jobs": list_jobs(cfg.staging_root)}
 
-    _job_errors: dict[int | str, dict[str, Any]] = {404: {"description": _NOT_FOUND}}
-
-    @app.get("/jobs/{job_id}", dependencies=[AuthDep], responses=_job_errors)
+    @app.get("/jobs/{job_id}", dependencies=[AuthDep], responses=_JOB_ERRORS)
     def job(job_id: str, cfg: ConfigDep) -> dict[str, Any]:
-        job_dir = _find_job(cfg, job_id)
-        if job_dir is None or not (job_dir / "state.json").is_file():
+        job_dir = _job_dir_or_404(cfg, job_id)
+        if not (job_dir / "state.json").is_file():
             raise HTTPException(status_code=404, detail=_NOT_FOUND)
         return read_state(job_dir)
 
-    @app.post("/jobs/{job_id}/retry", dependencies=[AuthDep], responses=_job_errors)
+    @app.post("/jobs/{job_id}/retry", dependencies=[AuthDep], responses=_JOB_ERRORS)
     def retry(job_id: str, cfg: ConfigDep) -> dict[str, Any]:
-        job_dir = _find_job(cfg, job_id)
-        if job_dir is None:
-            raise HTTPException(status_code=404, detail=_NOT_FOUND)
+        job_dir = _job_dir_or_404(cfg, job_id)
         write_state(job_dir, state="queued", error="", pct=0)
         return {"job_id": job_dir.name, "launcher": launcher.launch(job_dir.name)}
 
@@ -184,19 +199,20 @@ def create_app() -> FastAPI:
     )
     def remove(job_id: str, cfg: ConfigDep) -> dict[str, Any]:
         """Drop a finished or failed job from the list, staging leftovers too."""
-        job_dir = _find_job(cfg, job_id)
-        if job_dir is None:
-            raise HTTPException(status_code=404, detail=_NOT_FOUND)
+        job_dir = _job_dir_or_404(cfg, job_id)
         state = read_state(job_dir).get("state") if (job_dir / "state.json").is_file() else None
         if state == "active":
             raise HTTPException(status_code=409, detail="job is running")
         delete_job(cfg.staging_root, job_dir)
         return {"deleted": job_id}
 
-    @app.get("/config", dependencies=[AuthDep])
-    def config(cfg: ConfigDep) -> dict[str, Any]:
-        return cfg.as_dict()
 
+def create_app() -> FastAPI:
+    """Assemble the app from the route groups; each group stays small enough to read."""
+    app = FastAPI(title="sb-ctrl", version=__version__)
+    _add_session_routes(app)
+    _add_library_routes(app)
+    _add_job_routes(app)
     return app
 
 
