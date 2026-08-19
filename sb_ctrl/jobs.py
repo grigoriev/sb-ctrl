@@ -74,9 +74,62 @@ def write_state(job_dir: Path, **fields: Any) -> None:
     tmp.replace(path)
 
 
+def pid_alive(pid: int) -> bool:
+    """Whether a process with ``pid`` still exists.
+
+    The worker runs beside the API, in the same process namespace, so its pid
+    is one this process can ask about.
+    """
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def reconcile(staging_root: str) -> None:
+    """Mark every active job whose worker is gone as stalled.
+
+    A worker dies with its container, and nothing else would ever move the
+    job off ``active``: the list would show a frozen bar, and the job could
+    be neither deleted nor understood.
+    """
+    for state in list_jobs(staging_root):
+        if state.get("state") != "active" or pid_alive(int(state.get("pid", 0))):
+            continue
+        write_state(
+            jobs_dir(staging_root) / str(state["id"]),
+            state="stalled",
+            error="the worker stopped before the transfer finished",
+            rate="",
+            eta="",
+        )
+
+
 def read_state(job_dir: Path) -> dict[str, Any]:
     data: dict[str, Any] = json.loads((job_dir / "state.json").read_text())
     return data
+
+
+def log_path(staging_root: str, job_id: str) -> Path:
+    """Where a job keeps the output of the transfer tool."""
+    return jobs_dir(staging_root) / job_id / "job.log"
+
+
+def tail_log(job_dir: Path, lines: int = 200) -> str:
+    """The last ``lines`` of the job log, or an empty string when there is none."""
+    path = job_dir / "job.log"
+    if not path.is_file():
+        return ""
+    try:
+        text = path.read_text(errors="replace")
+    except OSError:
+        return ""
+    return "\n".join(text.splitlines()[-lines:])
 
 
 def delete_job(staging_root: str, job_dir: Path) -> None:

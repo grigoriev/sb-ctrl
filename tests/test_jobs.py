@@ -1,9 +1,25 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
-from sb_ctrl.jobs import create_job, list_jobs, read_spec, read_state, summary, write_state
+import pytest
+
+from sb_ctrl.jobs import (
+    create_job,
+    list_jobs,
+    log_path,
+    pid_alive,
+    read_spec,
+    read_state,
+    reconcile,
+    summary,
+    tail_log,
+    write_state,
+)
 
 
 def test_empty_staging_root_returns_nothing() -> None:
@@ -66,3 +82,70 @@ def test_write_state_merges_and_keeps_identity(tmp_path: Path) -> None:
     assert state["pct"] == 42
     assert state["rate"] == "1M/s"
     assert state["name"] == "X"
+
+
+def test_pid_alive_knows_this_process_and_rejects_nonsense() -> None:
+    assert pid_alive(os.getpid()) is True
+    assert pid_alive(0) is False
+    assert pid_alive(-1) is False
+
+
+def test_reconcile_marks_a_job_whose_worker_is_gone(tmp_path: Path) -> None:
+    job = create_job(str(tmp_path), {"name": "X"}, job_id="J10")
+    write_state(job, state="active", pct=40, rate="9 MB/s", eta="2m", pid=_dead_pid())
+    reconcile(str(tmp_path))
+    state = read_state(job)
+    assert state["state"] == "stalled"
+    assert state["error"]
+    assert state["rate"] == ""
+
+
+def test_reconcile_leaves_a_live_job_alone(tmp_path: Path) -> None:
+    job = create_job(str(tmp_path), {"name": "X"}, job_id="J11")
+    write_state(job, state="active", pct=40, pid=os.getpid())
+    reconcile(str(tmp_path))
+    assert read_state(job)["state"] == "active"
+
+
+def test_reconcile_ignores_a_finished_job(tmp_path: Path) -> None:
+    job = create_job(str(tmp_path), {"name": "X"}, job_id="J12")
+    write_state(job, state="done", pct=100, pid=_dead_pid())
+    reconcile(str(tmp_path))
+    assert read_state(job)["state"] == "done"
+
+
+def test_tail_log_returns_the_last_lines(tmp_path: Path) -> None:
+    job = create_job(str(tmp_path), {"name": "X"}, job_id="J13")
+    assert tail_log(job) == ""
+    (job / "job.log").write_text("one\ntwo\nthree\n")
+    assert tail_log(job, lines=2) == "two\nthree"
+
+
+def _dead_pid() -> int:
+    """A pid that has surely gone: a child that already exited."""
+    proc = subprocess.Popen([sys.executable, "-c", ""])
+    proc.wait()
+    return proc.pid
+
+
+def test_pid_alive_treats_a_forbidden_process_as_running(monkeypatch: pytest.MonkeyPatch) -> None:
+    def forbidden(_pid: int, _sig: int) -> None:
+        raise PermissionError
+
+    monkeypatch.setattr(os, "kill", forbidden)
+    assert pid_alive(1) is True
+
+
+def test_log_path_sits_next_to_the_spec(tmp_path: Path) -> None:
+    assert log_path(str(tmp_path), "J14") == tmp_path / ".jobs" / "J14" / "job.log"
+
+
+def test_tail_log_survives_an_unreadable_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    job = create_job(str(tmp_path), {"name": "X"}, job_id="J15")
+    (job / "job.log").write_text("something")
+
+    def unreadable(*_args: object, **_kwargs: object) -> str:
+        raise OSError("gone")
+
+    monkeypatch.setattr(Path, "read_text", unreadable)
+    assert tail_log(job) == ""

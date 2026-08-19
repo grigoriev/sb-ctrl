@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 from sb_ctrl import __version__, auth, launcher, planner, tmdb
 from sb_ctrl.config import Config, load_config
-from sb_ctrl.jobs import create_job, delete_job, jobs_dir, list_jobs, read_state, write_state
+from sb_ctrl.jobs import create_job, delete_job, jobs_dir, list_jobs, read_state, reconcile, tail_log, write_state
 from sb_ctrl.rtorrent import RTorrent
 
 _NOT_FOUND = "job not found"
@@ -177,14 +177,21 @@ def _add_job_routes(app: FastAPI) -> None:
 
     @app.get("/jobs", dependencies=[AuthDep])
     def jobs(cfg: ConfigDep) -> dict[str, Any]:
+        reconcile(cfg.staging_root)
         return {"jobs": list_jobs(cfg.staging_root)}
 
     @app.get("/jobs/{job_id}", dependencies=[AuthDep], responses=_JOB_ERRORS)
     def job(job_id: str, cfg: ConfigDep) -> dict[str, Any]:
+        reconcile(cfg.staging_root)
         job_dir = _job_dir_or_404(cfg, job_id)
         if not (job_dir / "state.json").is_file():
             raise HTTPException(status_code=404, detail=_NOT_FOUND)
         return read_state(job_dir)
+
+    @app.get("/jobs/{job_id}/log", dependencies=[AuthDep], responses=_JOB_ERRORS)
+    def job_log(job_id: str, cfg: ConfigDep) -> dict[str, Any]:
+        """What the transfer tool printed, so a failure can be read, not guessed."""
+        return {"log": tail_log(_job_dir_or_404(cfg, job_id))}
 
     @app.post("/jobs/{job_id}/retry", dependencies=[AuthDep], responses=_JOB_ERRORS)
     def retry(job_id: str, cfg: ConfigDep) -> dict[str, Any]:

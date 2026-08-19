@@ -276,3 +276,32 @@ def test_delete_a_job_that_never_wrote_a_state(tmp_path: Path) -> None:
     job = create_job(str(tmp_path), {"name": "x"})
     (job / "state.json").unlink(missing_ok=True)
     assert _client(cfg).delete(f"/jobs/{job.name}").status_code == 200
+
+
+def test_job_log_is_served(tmp_path: Path) -> None:
+    cfg = Config(staging_root=str(tmp_path))
+    job = create_job(cfg.staging_root, {"name": "X"}, job_id="J30")
+    (job / "job.log").write_text("lftp said this\n")
+    resp = _client(cfg).get("/jobs/J30/log")
+    assert resp.status_code == 200
+    assert resp.json()["log"] == "lftp said this"
+
+
+def test_job_log_of_an_unknown_job_is_404(tmp_path: Path) -> None:
+    resp = _client(Config(staging_root=str(tmp_path))).get("/jobs/nope/log")
+    assert resp.status_code == 404
+
+
+def test_a_job_with_no_state_is_404(tmp_path: Path) -> None:
+    cfg = Config(staging_root=str(tmp_path))
+    job = create_job(cfg.staging_root, {"name": "X"}, job_id="J31")
+    (job / "state.json").unlink()
+    assert _client(cfg).get("/jobs/J31").status_code == 404
+
+
+def test_listing_jobs_marks_a_dead_worker(tmp_path: Path) -> None:
+    cfg = Config(staging_root=str(tmp_path))
+    job = create_job(cfg.staging_root, {"name": "X"}, job_id="J32")
+    write_state(job, state="active", pct=10, pid=999_999)
+    body = _client(cfg).get("/jobs").json()
+    assert body["jobs"][0]["state"] == "stalled"

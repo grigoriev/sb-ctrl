@@ -17,7 +17,7 @@ from typing import Any
 
 from sb_ctrl import episodes, lftp
 from sb_ctrl.config import DEFAULT_SKIP_PATTERNS, DEFAULT_SUB_EXT, DEFAULT_VIDEO_EXT
-from sb_ctrl.jobs import jobs_dir, read_spec, write_state
+from sb_ctrl.jobs import jobs_dir, log_path, read_spec, write_state
 
 # progress(pct, rate, eta)
 ProgressCb = Callable[[int, str, str], None]
@@ -28,6 +28,8 @@ Chowner = Callable[[Path, str, str], None]
 
 # How often a running transfer reports how far it has got.
 PROGRESS_INTERVAL = 2.0
+# Headroom demanded on top of the transfer size, so the disk never fills up.
+SPACE_MARGIN = 1 << 30
 
 
 def default_chowner(path: Path, owner: str, group: str) -> None:  # pragma: no cover - needs privileges
@@ -86,13 +88,36 @@ def default_transfer(spec: dict[str, Any], item: Path, progress: ProgressCb) -> 
     # Sample the staging dir while lftp runs; it reports nothing itself.
     total = int(src.get("size", 0))
     started = time.monotonic()
-    proc = subprocess.Popen(argv)
-    while proc.poll() is None:
-        time.sleep(PROGRESS_INTERVAL)
-        progress(*transfer_progress(path_size(item), total, time.monotonic() - started))
+    # Keep what lftp says. Without it a failure is a bare exit status.
+    log = log_path(spec["staging_root"], str(spec["id"]))
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with log.open("a", encoding="utf-8", errors="replace") as sink:
+        sink.write(f"$ {' '.join(argv)}\n")
+        sink.flush()
+        proc = subprocess.Popen(argv, stdout=sink, stderr=subprocess.STDOUT)
+        while proc.poll() is None:
+            time.sleep(PROGRESS_INTERVAL)
+            progress(*transfer_progress(path_size(item), total, time.monotonic() - started))
     if proc.returncode != 0:
         raise subprocess.CalledProcessError(proc.returncode, argv)
     progress(100, "", "")
+
+
+def enough_space(path: Path, needed: int, usage: Callable[[Path], Any] | None = None) -> bool:
+    """Whether ``path`` holds ``needed`` bytes plus a small margin.
+
+    A transfer that fills the disk fails halfway and leaves the leftovers
+    behind, which is a worse way to learn the same fact.
+    """
+    if needed <= 0:
+        return True
+    # resolved here, not in the signature, so a caller can substitute it
+    measure = usage or shutil.disk_usage
+    try:
+        free = int(measure(path).free)
+    except OSError:
+        return True
+    return free >= needed + SPACE_MARGIN
 
 
 def _apply_perms(root: Path, perms: dict[str, Any], chowner: Chowner) -> None:
@@ -163,9 +188,13 @@ def run_job(job_dir: Path, *, transfer: Transfer = default_transfer, chowner: Ch
     """Execute a job: transfer, permission, move, and record state throughout."""
     spec = read_spec(job_dir)
     staging = Path(spec["staging_root"]) / ".staging" / spec["id"]
-    write_state(job_dir, state="active", pct=0)
+    # the pid lets the API tell a running transfer from one whose worker died
+    write_state(job_dir, state="active", pct=0, pid=os.getpid(), error="")
     try:
         staging.mkdir(parents=True, exist_ok=True)
+        needed = int((spec.get("source") or {}).get("size", 0))
+        if not enough_space(staging, needed):
+            raise OSError(f"not enough free space for {needed} bytes")
         item = staging / spec["staging_item"]
 
         def progress(pct: int, rate: str, eta: str) -> None:
