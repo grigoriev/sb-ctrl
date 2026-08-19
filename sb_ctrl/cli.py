@@ -65,12 +65,10 @@ def _cmd_config() -> dict[str, Any]:
 
 def _cmd_search(name: str) -> dict[str, Any]:
     cfg = load_config()
-    guess = tmdb.guess(name)
-    client = tmdb.TMDb(cfg.tmdb_key, cfg.tmdb_lang)
-    candidates = client.search(guess["query"] or name, guess["media"])
+    result = tmdb.search_for(tmdb.TMDb(cfg.tmdb_key, cfg.tmdb_lang), name)
     return {
-        "guess": guess,
-        "candidates": [{**dataclasses.asdict(c), "kind": c.kind} for c in candidates],
+        "guess": result["guess"],
+        "candidates": [{**dataclasses.asdict(c), "kind": c.kind} for c in result["candidates"]],
     }
 
 
