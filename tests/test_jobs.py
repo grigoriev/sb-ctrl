@@ -172,3 +172,39 @@ def test_by_source_keeps_the_newest_job_for_a_source() -> None:
 
 def test_by_source_skips_a_job_with_neither_key() -> None:
     assert by_source([{"id": "J1"}]) == {}
+
+
+def test_reconcile_backfills_a_state_from_an_older_version(tmp_path: Path) -> None:
+    spec = {
+        "name": "1670 (2023)",
+        "kind": "series",
+        "dest_path": "/media/series/1670 (2023)",
+        "source": {"base_rel": "files/1670.S03.WEB-DL.1080p", "size": 21_309_343_182},
+    }
+    job = create_job(str(tmp_path), spec, job_id="J16")
+    # a state as 0.2.0 wrote it: no release, no kind, no dest
+    (job / "state.json").write_text(json.dumps({"id": "J16", "name": "1670 (2023)", "state": "done", "pct": 100}))
+
+    reconcile(str(tmp_path))
+
+    state = read_state(job)
+    assert state["release"] == "1670.S03.WEB-DL.1080p"
+    assert state["kind"] == "series"
+    assert state["dest"] == "/media/series/1670 (2023)"
+    assert state["size"] == 21_309_343_182
+    assert state["state"] == "done"
+
+
+def test_reconcile_leaves_a_filled_state_alone(tmp_path: Path) -> None:
+    job = create_job(str(tmp_path), {"name": "X", "source": {"base_rel": "files/X"}}, job_id="J17")
+    write_state(job, release="kept by hand")
+    reconcile(str(tmp_path))
+    assert read_state(job)["release"] == "kept by hand"
+
+
+def test_reconcile_survives_a_job_with_no_spec(tmp_path: Path) -> None:
+    job = create_job(str(tmp_path), {"name": "X"}, job_id="J18")
+    (job / "state.json").write_text(json.dumps({"id": "J18", "state": "done"}))
+    (job / "spec.json").unlink()
+    reconcile(str(tmp_path))
+    assert read_state(job)["state"] == "done"
