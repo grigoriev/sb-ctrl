@@ -12,10 +12,11 @@ import re
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 TMDB_BASE = "https://api.themoviedb.org/3"
+FALLBACK_LANG = "en-US"
 ANIMATION_GENRE = 16
 
 _YEAR = re.compile(r"(19|20)\d{2}")
@@ -94,15 +95,29 @@ class TMDb:
         self._fetch: FetchFn = fetch or self._http_get
 
     def _http_get(self, path: str, params: dict[str, str]) -> dict[str, Any]:  # pragma: no cover - network
-        query = urllib.parse.urlencode({**params, "api_key": self._key, "language": self._lang})
+        # language first, so a caller can ask for another one
+        query = urllib.parse.urlencode({"language": self._lang, **params, "api_key": self._key})
         with urllib.request.urlopen(f"{TMDB_BASE}{path}?{query}", timeout=8) as response:  # noqa: S310
             data: dict[str, Any] = json.loads(response.read())
         return data
 
-    def search(self, query: str, media: str = "multi") -> list[Candidate]:
-        data = self._fetch(f"/search/{media}", {"query": query})
+    def search(self, query: str, media: str = "multi", lang: str = "") -> list[Candidate]:
+        params = {"query": query, "language": lang} if lang else {"query": query}
+        data = self._fetch(f"/search/{media}", params)
         results = data.get("results", [])
         return [self._candidate(r) for r in results if _usable(r)]
+
+    def fill_overviews(self, candidates: list[Candidate], query: str, media: str) -> list[Candidate]:
+        """Fill an empty overview from the English catalogue.
+
+        TMDb has no translated overview for every title, and a card with no
+        text is worse than one in English. Costs one extra request, and only
+        when something is actually missing.
+        """
+        if self._lang == FALLBACK_LANG:
+            return candidates
+        english = {c.tmdb_id: c.overview for c in self.search(query, media, lang=FALLBACK_LANG)}
+        return [c if c.overview else replace(c, overview=english.get(c.tmdb_id, "")) for c in candidates]
 
     def _candidate(self, r: dict[str, Any]) -> Candidate:
         media = r.get("media_type") or ("tv" if "first_air_date" in r else "movie")
@@ -134,14 +149,19 @@ def _usable(r: dict[str, Any]) -> bool:
 
 
 def search_for(client: TMDb, name: str) -> dict[str, Any]:
-    """Guess from a torrent name and search; retry across media types when empty.
+    """Guess from a torrent name and search, then patch the gaps.
 
     The guessed media type is only a guess, so an empty typed search falls back
-    to ``multi`` before the caller reports no matches.
+    to ``multi`` before the caller reports no matches. A missing overview falls
+    back to English.
     """
     hint = guess(name)
     query = hint["query"] or name
-    candidates = client.search(query, hint["media"])
+    media = hint["media"]
+    candidates = client.search(query, media)
     if not candidates:
-        candidates = client.search(query, "multi")
+        media = "multi"
+        candidates = client.search(query, media)
+    if any(not c.overview for c in candidates):
+        candidates = client.fill_overviews(candidates, query, media)
     return {"guess": hint, "candidates": candidates}

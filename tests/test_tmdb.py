@@ -124,3 +124,40 @@ def test_search_for_falls_back_to_the_raw_name() -> None:
     client = _Recorder("movie")
     search_for(client, "1080p")  # type: ignore[arg-type]
     assert client.calls[0] == ("1080p", "movie")
+
+
+def _by_language(ru: dict[str, Any], en: dict[str, Any]) -> Any:
+    """A fetch that answers differently per requested language."""
+
+    def fetch(path: str, params: dict[str, str]) -> dict[str, Any]:
+        return en if params.get("language") == "en-US" else ru
+
+    return fetch
+
+
+def test_fill_overviews_borrows_the_english_text() -> None:
+    ru = {"results": [{"id": 5, "title": "Тихий", "overview": ""}, {"id": 6, "title": "Шумный", "overview": "есть"}]}
+    en = {"results": [{"id": 5, "title": "Quiet", "overview": "a quiet film"}]}
+    client = TMDb("k", lang="ru-RU", fetch=_by_language(ru, en))
+    filled = client.fill_overviews(client.search("x"), "x", "movie")
+    assert [c.overview for c in filled] == ["a quiet film", "есть"]
+
+
+def test_fill_overviews_leaves_an_english_client_alone() -> None:
+    ru = {"results": [{"id": 5, "title": "Quiet", "overview": ""}]}
+    client = TMDb("k", fetch=_by_language(ru, {"results": []}))
+    assert client.fill_overviews(client.search("x"), "x", "movie")[0].overview == ""
+
+
+def test_fill_overviews_keeps_an_empty_overview_with_no_english_match() -> None:
+    ru = {"results": [{"id": 5, "title": "Тихий", "overview": ""}]}
+    client = TMDb("k", lang="ru-RU", fetch=_by_language(ru, {"results": []}))
+    assert client.fill_overviews(client.search("x"), "x", "movie")[0].overview == ""
+
+
+def test_search_for_fills_a_missing_overview() -> None:
+    ru = {"results": [{"id": 5, "title": "Тихий", "overview": ""}]}
+    en = {"results": [{"id": 5, "title": "Quiet", "overview": "a quiet film"}]}
+    client = TMDb("k", lang="ru-RU", fetch=_by_language(ru, en))
+    result = search_for(client, "Some.Movie.2024.1080p")
+    assert result["candidates"][0].overview == "a quiet film"
