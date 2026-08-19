@@ -59,6 +59,7 @@ def test_search_parses_and_filters() -> None:
                 "release_date": "2014-08-01",
                 "genre_ids": [28, 16],
                 "overview": "o",
+                "poster_path": "/abc.jpg",
             },
             {"id": 2, "media_type": "person", "name": "Someone"},
             {
@@ -77,6 +78,8 @@ def test_search_parses_and_filters() -> None:
     assert cands[0].year == "2014"
     assert cands[0].original_title == "Guardians orig"
     assert cands[0].is_animation is True
+    assert cands[0].poster == "https://image.tmdb.org/t/p/w154/abc.jpg"
+    assert cands[1].poster == ""
     assert cands[0].kind == "cartoon"
     assert cands[1].media == "tv"
     assert cands[1].kind == "series"
