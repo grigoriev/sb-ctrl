@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -305,3 +306,43 @@ def test_listing_jobs_marks_a_dead_worker(tmp_path: Path) -> None:
     write_state(job, state="active", pct=10, pid=999_999)
     body = _client(cfg).get("/jobs").json()
     assert body["jobs"][0]["state"] == "stalled"
+
+
+def test_torrents_report_a_delivered_title(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(api, "RTorrent", _FakeRT)
+    cfg = Config(staging_root=str(tmp_path))
+    dest = tmp_path / "movies" / "Movie"
+    dest.mkdir(parents=True)
+    job = create_job(cfg.staging_root, {"name": "Movie", "source": {"hash": "H1"}}, job_id="J40")
+    write_state(job, state="done", pct=100, dest=str(dest))
+    item = _client(cfg).get("/torrents").json()["items"][0]
+    assert item["delivered"] is True
+    assert item["job"] == {"id": "J40", "state": "done", "pct": 100}
+
+
+def test_torrents_report_a_transfer_in_flight(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(api, "RTorrent", _FakeRT)
+    cfg = Config(staging_root=str(tmp_path))
+    job = create_job(cfg.staging_root, {"name": "Movie", "source": {"hash": "H1"}}, job_id="J41")
+    write_state(job, state="active", pct=35, pid=os.getpid())
+    item = _client(cfg).get("/torrents").json()["items"][0]
+    assert item["job"]["pct"] == 35
+    assert item["delivered"] is False
+
+
+def test_torrents_match_an_older_job_by_release(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(api, "RTorrent", _FakeRT)
+    cfg = Config(staging_root=str(tmp_path))
+    job = create_job(cfg.staging_root, {"name": "Movie", "source": {"base_rel": "files/Movie.mkv"}}, job_id="J42")
+    write_state(job, state="done", pct=100, dest=str(tmp_path / "gone"))
+    item = _client(cfg).get("/torrents").json()["items"][0]
+    assert item["job"]["id"] == "J42"
+    # the library no longer holds it, so it is not delivered
+    assert item["delivered"] is False
+
+
+def test_torrents_stay_bare_without_a_job(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(api, "RTorrent", _FakeRT)
+    item = _client(Config(staging_root=str(tmp_path))).get("/torrents").json()["items"][0]
+    assert "job" not in item
+    assert "delivered" not in item

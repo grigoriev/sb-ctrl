@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from sb_ctrl.jobs import (
+    by_source,
     create_job,
     list_jobs,
     log_path,
@@ -16,6 +17,7 @@ from sb_ctrl.jobs import (
     read_spec,
     read_state,
     reconcile,
+    release_name,
     summary,
     tail_log,
     write_state,
@@ -71,7 +73,7 @@ def test_create_job_records_what_the_list_shows(tmp_path: Path) -> None:
 
 
 def test_summary_of_a_bare_spec_is_empty() -> None:
-    assert summary({}) == {"kind": "", "release": "", "size": 0, "dest": ""}
+    assert summary({}) == {"kind": "", "hash": "", "release": "", "size": 0, "dest": ""}
 
 
 def test_write_state_merges_and_keeps_identity(tmp_path: Path) -> None:
@@ -149,3 +151,24 @@ def test_tail_log_survives_an_unreadable_file(tmp_path: Path, monkeypatch: pytes
 
     monkeypatch.setattr(Path, "read_text", unreadable)
     assert tail_log(job) == ""
+
+
+def test_release_name_takes_the_last_component() -> None:
+    assert release_name("files/1670.S03.WEB-DL.1080p") == "1670.S03.WEB-DL.1080p"
+    assert release_name("files/Show/") == "Show"
+    assert release_name("") == ""
+
+
+def test_by_source_indexes_a_job_under_both_keys() -> None:
+    index = by_source([{"id": "J1", "hash": "H1", "release": "R1"}])
+    assert index["H1"]["id"] == "J1"
+    assert index["R1"]["id"] == "J1"
+
+
+def test_by_source_keeps_the_newest_job_for_a_source() -> None:
+    index = by_source([{"id": "J1", "hash": "H1"}, {"id": "J2", "hash": "H1"}])
+    assert index["H1"]["id"] == "J2"
+
+
+def test_by_source_skips_a_job_with_neither_key() -> None:
+    assert by_source([{"id": "J1"}]) == {}

@@ -17,7 +17,18 @@ from pydantic import BaseModel
 
 from sb_ctrl import __version__, auth, launcher, planner, tmdb
 from sb_ctrl.config import Config, load_config
-from sb_ctrl.jobs import create_job, delete_job, jobs_dir, list_jobs, read_state, reconcile, tail_log, write_state
+from sb_ctrl.jobs import (
+    by_source,
+    create_job,
+    delete_job,
+    jobs_dir,
+    list_jobs,
+    read_state,
+    reconcile,
+    release_name,
+    tail_log,
+    write_state,
+)
 from sb_ctrl.rtorrent import RTorrent
 
 _NOT_FOUND = "job not found"
@@ -144,10 +155,28 @@ def _add_session_routes(app: FastAPI) -> None:
         return {"ok": True}
 
 
+def _with_job(item: dict[str, Any], index: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """Attach the job that pulled this torrent, and whether it is in the library.
+
+    The list is where a user decides what to send, so it has to say what is
+    already there and what is on its way.
+    """
+    state = index.get(str(item.get("hash", ""))) or index.get(release_name(str(item.get("base_rel", ""))))
+    if state is None:
+        return item
+    dest = str(state.get("dest", ""))
+    delivered = state.get("state") == "done" and bool(dest) and Path(dest).exists()
+    job = {"id": state.get("id", ""), "state": state.get("state", ""), "pct": state.get("pct")}
+    return {**item, "job": job, "delivered": delivered}
+
+
 def _add_library_routes(app: FastAPI) -> None:
     @app.get("/torrents", dependencies=[AuthDep])
     def torrents(cfg: ConfigDep) -> dict[str, Any]:
-        return {"items": [dataclasses.asdict(t) for t in _client(cfg).list_completed()]}
+        reconcile(cfg.staging_root)
+        index = by_source(list_jobs(cfg.staging_root))
+        items = [dataclasses.asdict(t) for t in _client(cfg).list_completed()]
+        return {"items": [_with_job(item, index) for item in items]}
 
     @app.get("/search", dependencies=[AuthDep])
     def search(name: str, cfg: ConfigDep) -> dict[str, Any]:
