@@ -11,6 +11,7 @@ import json
 import os
 import shutil
 import time
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,25 @@ def new_job_id() -> str:
     return time.strftime("%Y%m%d-%H%M%S") + "-" + os.urandom(2).hex()
 
 
+def release_name(base_rel: str) -> str:
+    """The last path component of a remote path, which names the release."""
+    return str(base_rel).rstrip("/").rsplit("/", 1)[-1]
+
+
+def by_source(states: Iterable[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Index job states by what each one pulled.
+
+    Both the torrent hash and the release name are keys, because a job made
+    before the hash was recorded can still be found by its release.
+    """
+    index: dict[str, dict[str, Any]] = {}
+    for state in states:
+        for key in (str(state.get("hash", "")), str(state.get("release", ""))):
+            if key:
+                index[key] = state
+    return index
+
+
 def summary(spec: dict[str, Any]) -> dict[str, Any]:
     """The parts of the plan a client shows beside the progress bar.
 
@@ -31,10 +51,10 @@ def summary(spec: dict[str, Any]) -> dict[str, Any]:
     it carries the season the pack came from.
     """
     source = spec.get("source") or {}
-    release = str(source.get("base_rel", "")).rstrip("/").rsplit("/", 1)[-1]
     return {
         "kind": str(spec.get("kind", "")),
-        "release": release,
+        "hash": str(source.get("hash", "")),
+        "release": release_name(str(source.get("base_rel", ""))),
         "size": int(source.get("size", 0)),
         "dest": str(spec.get("dest_path", "")),
     }
