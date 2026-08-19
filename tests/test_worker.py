@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from sb_ctrl import worker
 from sb_ctrl.config import Config
 from sb_ctrl.jobs import create_job, read_state
 from sb_ctrl.planner import plan
@@ -126,3 +127,46 @@ def test_failure_records_error(tmp_path: Path) -> None:
     state = read_state(job)
     assert state["state"] == "failed"
     assert state["error"] == "lftp died"
+
+
+# --- progress ------------------------------------------------------------
+
+
+def test_path_size_counts_a_file_a_tree_and_nothing(tmp_path: Path) -> None:
+    assert worker.path_size(tmp_path / "gone") == 0
+
+    single = tmp_path / "one.mkv"
+    single.write_bytes(b"x" * 10)
+    assert worker.path_size(single) == 10
+
+    tree = tmp_path / "show"
+    (tree / "s01").mkdir(parents=True)
+    (tree / "s01" / "e01.mkv").write_bytes(b"y" * 7)
+    (tree / "s01" / "e02.mkv").write_bytes(b"z" * 3)
+    assert worker.path_size(tree) == 10
+
+
+def test_human_eta_scales() -> None:
+    assert worker.human_eta(45) == "45s"
+    assert worker.human_eta(200) == "3m"
+    assert worker.human_eta(3900) == "1h 5m"
+
+
+def test_transfer_progress_reports_percent_rate_and_eta() -> None:
+    # A quarter of 4 MiB in one second: 1 MiB/s, three seconds left.
+    pct, rate, eta = worker.transfer_progress(1048576, 4194304, 1.0)
+    assert pct == 25
+    assert rate == "1.0 MB/s"
+    assert eta == "3s"
+
+
+def test_transfer_progress_never_reports_a_hundred() -> None:
+    pct, _, eta = worker.transfer_progress(1000, 1000, 1.0)
+    assert pct == 99
+    assert eta == "0s"
+
+
+def test_transfer_progress_says_nothing_before_the_first_bytes() -> None:
+    assert worker.transfer_progress(0, 1000, 1.0) == (0, "", "")
+    assert worker.transfer_progress(500, 0, 1.0) == (0, "", "")
+    assert worker.transfer_progress(500, 1000, 0.0) == (0, "", "")

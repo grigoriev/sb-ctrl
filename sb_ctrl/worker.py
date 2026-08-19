@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,9 @@ Transfer = Callable[[dict[str, Any], Path, ProgressCb], None]
 # chowner(path, owner, group)
 Chowner = Callable[[Path, str, str], None]
 
+# How often a running transfer reports how far it has got.
+PROGRESS_INTERVAL = 2.0
+
 
 def default_chowner(path: Path, owner: str, group: str) -> None:  # pragma: no cover - needs privileges
     import grp
@@ -33,6 +37,39 @@ def default_chowner(path: Path, owner: str, group: str) -> None:  # pragma: no c
     uid = pwd.getpwnam(owner).pw_uid
     gid = grp.getgrnam(group).gr_gid
     os.chown(path, uid, gid)
+
+
+def path_size(path: Path) -> int:
+    """Bytes on disk under ``path``. A missing path counts as nothing yet."""
+    if not path.exists():
+        return 0
+    if path.is_file():
+        return path.stat().st_size
+    return sum(p.stat().st_size for p in path.rglob("*") if p.is_file())
+
+
+def human_eta(seconds: float) -> str:
+    """A short, readable time left: 45s, 3m, 1h 5m."""
+    total = int(seconds)
+    if total < 60:
+        return f"{total}s"
+    if total < 3600:
+        return f"{total // 60}m"
+    return f"{total // 3600}h {(total % 3600) // 60}m"
+
+
+def transfer_progress(done: int, total: int, elapsed: float) -> tuple[int, str, str]:
+    """Percent, rate and ETA from what has landed so far.
+
+    Reports at most 99: the hundred belongs to a transfer that actually ended.
+    Before the first bytes there is nothing to extrapolate from.
+    """
+    if total <= 0 or done <= 0 or elapsed <= 0:
+        return 0, "", ""
+    speed = done / elapsed
+    pct = min(99, int(done * 100 / total))
+    remaining = max(0.0, (total - done) / speed)
+    return pct, f"{speed / 1048576:.1f} MB/s", human_eta(remaining)
 
 
 def default_transfer(spec: dict[str, Any], item: Path, progress: ProgressCb) -> None:  # pragma: no cover - network
@@ -46,7 +83,15 @@ def default_transfer(spec: dict[str, Any], item: Path, progress: ProgressCb) -> 
         int(spec["lftp"].get("parallel", 1)),
         src.get("user", ""),
     )
-    subprocess.check_call(argv)
+    # Sample the staging dir while lftp runs; it reports nothing itself.
+    total = int(src.get("size", 0))
+    started = time.monotonic()
+    proc = subprocess.Popen(argv)
+    while proc.poll() is None:
+        time.sleep(PROGRESS_INTERVAL)
+        progress(*transfer_progress(path_size(item), total, time.monotonic() - started))
+    if proc.returncode != 0:
+        raise subprocess.CalledProcessError(proc.returncode, argv)
     progress(100, "", "")
 
 
