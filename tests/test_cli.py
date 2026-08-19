@@ -16,7 +16,7 @@ class _FakeTMDb:
     def __init__(self, *args: object, **kwargs: object) -> None:
         pass
 
-    def search(self, query: str, media: str = "multi") -> list[Candidate]:
+    def search(self, query: str, media: str = "multi", lang: str = "", year: str = "") -> list[Candidate]:
         return [Candidate(7, "movie", "T", "Orig", "2020", "o", False)]
 
 
