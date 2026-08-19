@@ -47,7 +47,7 @@ def write_state(job_dir: Path, **fields: Any) -> None:
     if path.is_file():
         try:
             state = json.loads(path.read_text())
-        except (OSError, json.JSONDecodeError):
+        except OSError, json.JSONDecodeError:
             state = {}
     state.setdefault("id", job_dir.name)
     with contextlib.suppress(OSError, json.JSONDecodeError):
@@ -88,6 +88,6 @@ def list_jobs(staging_root: str) -> list[dict[str, Any]]:
             continue
         try:
             out.append(json.loads(state.read_text()))
-        except (OSError, json.JSONDecodeError):
+        except OSError, json.JSONDecodeError:
             continue
     return out

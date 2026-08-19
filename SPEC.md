@@ -29,7 +29,7 @@ point.
 
 ## 2. Language & layout
 
-- **Python 3** (3.12 and 3.14), **FastAPI** + **uvicorn**. The domain modules
+- **Python 3.14**, **FastAPI** + **uvicorn**. The domain modules
   (`rtorrent`, `planner`, `jobs`, `lftp`, `launcher`, `worker`) use the standard
   library; `api.py` is a thin FastAPI adapter over them.
 - Package `sb_ctrl`, console entry point `sb-ctrl` (`serve`, `run-job`, and
