@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import os
+import shutil
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 from sb_ctrl import worker
 from sb_ctrl.config import Config
@@ -188,3 +192,56 @@ def test_season_summary_counts_episodes_not_files() -> None:
 
 def test_season_summary_of_nothing_is_empty() -> None:
     assert worker.season_summary([]) == []
+
+
+def test_enough_space_is_true_without_a_size(tmp_path: Path) -> None:
+    assert worker.enough_space(tmp_path, 0) is True
+
+
+def test_enough_space_compares_against_the_margin(tmp_path: Path) -> None:
+    class _Usage:
+        free = worker.SPACE_MARGIN + 100
+
+    assert worker.enough_space(tmp_path, 100, usage=lambda _p: _Usage) is True
+    assert worker.enough_space(tmp_path, 101, usage=lambda _p: _Usage) is False
+
+
+def test_enough_space_allows_the_transfer_when_the_disk_cannot_be_read(tmp_path: Path) -> None:
+    def broken(_path: Path) -> Any:
+        raise OSError("no statvfs here")
+
+    assert worker.enough_space(tmp_path, 100, usage=broken) is True
+
+
+def test_a_transfer_that_does_not_fit_fails_the_job(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = _cfg(tmp_path)
+    spec = plan(cfg, {"name": "Big", "size": 1 << 40, "is_multi": False, "base_rel": "files/Big.mkv"}, "movie")[
+        "job_spec"
+    ]
+    job = create_job(cfg.staging_root, spec, job_id="J20")
+
+    class _Tiny:
+        free = 1
+
+    def transfer(spec: dict[str, Any], item: Path, progress: Any) -> None:
+        raise AssertionError("must not start")
+
+    monkeypatch.setattr(shutil, "disk_usage", lambda _p: _Tiny)
+    _, chowner = _chowner_recorder()
+    run_job(job, transfer=transfer, chowner=chowner)
+    state = read_state(job)
+    assert state["state"] == "failed"
+    assert "free space" in state["error"]
+
+
+def test_a_running_job_records_its_pid(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    spec = plan(cfg, {"name": "X", "size": 1, "is_multi": False, "base_rel": "files/X.mkv"}, "movie")["job_spec"]
+    job = create_job(cfg.staging_root, spec, job_id="J21")
+
+    def transfer(spec: dict[str, Any], item: Path, progress: Any) -> None:
+        item.write_text("v")
+
+    _, chowner = _chowner_recorder()
+    run_job(job, transfer=transfer, chowner=chowner)
+    assert read_state(job)["pid"] == os.getpid()
