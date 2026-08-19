@@ -98,7 +98,7 @@ class _Recorder:
         self.hit = hit
         self.calls: list[tuple[str, str]] = []
 
-    def search(self, query: str, media: str = "multi") -> list[Candidate]:
+    def search(self, query: str, media: str = "multi", lang: str = "", year: str = "") -> list[Candidate]:
         self.calls.append((query, media))
         if media != self.hit:
             return []
@@ -161,3 +161,49 @@ def test_search_for_fills_a_missing_overview() -> None:
     client = TMDb("k", lang="ru-RU", fetch=_by_language(ru, en))
     result = search_for(client, "Some.Movie.2024.1080p")
     assert result["candidates"][0].overview == "a quiet film"
+
+
+def test_guess_keeps_a_future_number_in_the_title() -> None:
+    g = guess("Blade.Runner.2049.2160p.BluRay")
+    assert g["query"] == "Blade Runner 2049"
+    assert g["year"] == ""
+
+
+def test_guess_prefers_a_year_that_leaves_a_title() -> None:
+    assert guess("2012.2009.BDRip") == {"media": "movie", "query": "2012", "year": "2009"}
+    assert guess("1917.2019.1080p") == {"media": "movie", "query": "1917", "year": "2019"}
+
+
+def test_search_sends_the_year_the_endpoint_expects() -> None:
+    seen: list[dict[str, str]] = []
+
+    def fetch(path: str, params: dict[str, str]) -> dict[str, Any]:
+        seen.append({"path": path, **params})
+        return {"results": []}
+
+    client = TMDb("k", fetch=fetch)
+    client.search("x", "movie", year="1999")
+    client.search("x", "tv", year="1999")
+    client.search("x", "multi", year="1999")
+    assert seen[0]["year"] == "1999"
+    assert seen[1]["first_air_date_year"] == "1999"
+    assert "year" not in seen[2] and "first_air_date_year" not in seen[2]
+
+
+def test_search_for_drops_the_year_before_the_media_type() -> None:
+    calls: list[dict[str, str]] = []
+
+    def fetch(path: str, params: dict[str, str]) -> dict[str, Any]:
+        calls.append({"path": path, **params})
+        if path == "/search/multi":
+            return {"results": [{"id": 1, "title": "T", "overview": "o"}]}
+        return {"results": []}
+
+    client = TMDb("k", fetch=fetch)
+    result = search_for(client, "Some.Movie.2024.1080p")
+    assert [(c["path"], c.get("year", "")) for c in calls] == [
+        ("/search/movie", "2024"),
+        ("/search/movie", ""),
+        ("/search/multi", ""),
+    ]
+    assert len(result["candidates"]) == 1

@@ -7,6 +7,7 @@ original title; a client picks the match and passes it to ``plan``.
 
 from __future__ import annotations
 
+import datetime
 import json
 import re
 import urllib.parse
@@ -17,6 +18,8 @@ from typing import Any
 
 TMDB_BASE = "https://api.themoviedb.org/3"
 FALLBACK_LANG = "en-US"
+# how each search endpoint names the year; /search/multi takes none
+_YEAR_PARAM = {"movie": "year", "tv": "first_air_date_year"}
 ANIMATION_GENRE = 16
 
 _YEAR = re.compile(r"(19|20)\d{2}")
@@ -61,6 +64,19 @@ class Candidate:
         return "cartoon" if self.is_animation else "movie"
 
 
+def _plausible_year(text: str) -> re.Match[str] | None:
+    """The first four digit run a release could actually be dated by.
+
+    A title carries numbers too: "Blade Runner 2049" is not from 2049. Anything
+    past next year is part of the name, not the year of release, and a year
+    that would leave no title at all is the name itself.
+    """
+    limit = datetime.date.today().year + 1
+    matches = [m for m in _YEAR.finditer(text) if int(m.group(0)) <= limit]
+    # a title can be a year ("2012"), so prefer a match that leaves a name behind
+    return next((m for m in matches if text[: m.start()].strip(" -")), matches[0] if matches else None)
+
+
 def _cut_at(text: str, pattern: re.Pattern[str]) -> str:
     """Drop everything from the first match of ``pattern``."""
     match = pattern.search(text)
@@ -78,7 +94,7 @@ def guess(name: str) -> dict[str, str]:
     cleaned = stripped.replace(".", " ").replace("_", " ")
     cleaned = _cut_at(cleaned, _EPISODE)
     cleaned = _cut_at(cleaned, _SEASON)
-    year_match = _YEAR.search(cleaned)
+    year_match = _plausible_year(cleaned)
     year = year_match.group(0) if year_match else ""
     if year_match:
         cleaned = cleaned[: year_match.start()]
@@ -101,8 +117,13 @@ class TMDb:
             data: dict[str, Any] = json.loads(response.read())
         return data
 
-    def search(self, query: str, media: str = "multi", lang: str = "") -> list[Candidate]:
-        params = {"query": query, "language": lang} if lang else {"query": query}
+    def search(self, query: str, media: str = "multi", lang: str = "", year: str = "") -> list[Candidate]:
+        params = {"query": query}
+        if lang:
+            params["language"] = lang
+        year_param = _YEAR_PARAM.get(media)
+        if year and year_param:
+            params[year_param] = year
         data = self._fetch(f"/search/{media}", params)
         results = data.get("results", [])
         return [self._candidate(r) for r in results if _usable(r)]
@@ -151,14 +172,17 @@ def _usable(r: dict[str, Any]) -> bool:
 def search_for(client: TMDb, name: str) -> dict[str, Any]:
     """Guess from a torrent name and search, then patch the gaps.
 
-    The guessed media type is only a guess, so an empty typed search falls back
-    to ``multi`` before the caller reports no matches. A missing overview falls
-    back to English.
+    The year narrows the search when the name carries one. Both it and the
+    guessed media type are only guesses, so an empty result drops the year
+    first, then the media type, before the caller reports no matches. A
+    missing overview falls back to English.
     """
     hint = guess(name)
     query = hint["query"] or name
     media = hint["media"]
-    candidates = client.search(query, media)
+    candidates = client.search(query, media, year=hint["year"])
+    if not candidates and hint["year"]:
+        candidates = client.search(query, media)
     if not candidates:
         media = "multi"
         candidates = client.search(query, media)
