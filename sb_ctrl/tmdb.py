@@ -20,7 +20,7 @@ ANIMATION_GENRE = 16
 
 _YEAR = re.compile(r"(19|20)\d{2}")
 _EPISODE = re.compile(r"[Ss]\d{1,2}[Ee]\d{1,2}|\b\d{1,2}x\d{1,2}\b")
-_SEASON = re.compile(r"\b[Ss]\d{1,2}(?:-[Ss]?\d{1,2})?\b|\bseason\s*\d{1,2}\b", re.I)
+_SEASON = re.compile(r"\bs\d{1,2}(?:-s?\d{1,2})?\b|\bseason\s*\d{1,2}\b", re.I)
 _CONTAINER = re.compile(r"\.(?:mkv|mp4|avi|m4v|mov|ts|wmv|flv)$", re.I)
 
 # release tags; everything from the first one is noise, not part of the title
