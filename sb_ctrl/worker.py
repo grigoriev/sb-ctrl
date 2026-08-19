@@ -11,7 +11,7 @@ import os
 import shutil
 import subprocess
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
@@ -106,7 +106,22 @@ def _apply_perms(root: Path, perms: dict[str, Any], chowner: Chowner) -> None:
             chowner(path, owner, group)
 
 
-def _finalize_episodes(spec: dict[str, Any], item: Path, chowner: Chowner) -> None:
+def season_summary(targets: Iterable[tuple[Path, str]]) -> list[dict[str, int]]:
+    """How many distinct episodes landed in each season.
+
+    Counts pairs, not files, so a subtitle beside its video is not a second
+    episode. The client reports which seasons a pack delivered.
+    """
+    seen: dict[int, set[int]] = {}
+    for _, target in targets:
+        parsed = episodes.parse_episode(Path(target).name)
+        if parsed is not None:
+            season, number = parsed
+            seen.setdefault(season, set()).add(number)
+    return [{"season": season, "episodes": len(seen[season])} for season in sorted(seen)]
+
+
+def _finalize_episodes(spec: dict[str, Any], item: Path, chowner: Chowner) -> list[dict[str, int]]:
     show_dir = spec["dest_path"]
     files = spec.get("files") or {}
     targets = episodes.episode_targets(
@@ -125,12 +140,13 @@ def _finalize_episodes(spec: dict[str, Any], item: Path, chowner: Chowner) -> No
             dest.unlink()
         os.replace(src, dest)
     _apply_perms(Path(show_dir), spec["perms"], chowner)
+    return season_summary(targets)
 
 
-def _finalize(spec: dict[str, Any], item: Path, chowner: Chowner) -> None:
+def _finalize(spec: dict[str, Any], item: Path, chowner: Chowner) -> list[dict[str, int]]:
+    """Deliver the staged item and report the seasons it held, if any."""
     if spec.get("mode") == "episodes":
-        _finalize_episodes(spec, item, chowner)
-        return
+        return _finalize_episodes(spec, item, chowner)
     _apply_perms(item, spec["perms"], chowner)
     dest = Path(spec["dest_path"])
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -140,6 +156,7 @@ def _finalize(spec: dict[str, Any], item: Path, chowner: Chowner) -> None:
         else:
             dest.unlink()
     os.replace(item, dest)
+    return []
 
 
 def run_job(job_dir: Path, *, transfer: Transfer = default_transfer, chowner: Chowner = default_chowner) -> None:
@@ -155,10 +172,10 @@ def run_job(job_dir: Path, *, transfer: Transfer = default_transfer, chowner: Ch
             write_state(job_dir, state="active", pct=pct, rate=rate, eta=eta)
 
         transfer(spec, item, progress)
-        _finalize(spec, item, chowner)
-        write_state(job_dir, state="done", pct=100)
+        seasons = _finalize(spec, item, chowner)
+        write_state(job_dir, state="done", pct=100, seasons=seasons, finished=int(time.time()))
     except Exception as exc:  # noqa: BLE001 - any failure becomes a failed job
-        write_state(job_dir, state="failed", error=str(exc))
+        write_state(job_dir, state="failed", error=str(exc), finished=int(time.time()))
 
 
 def run_job_by_id(staging_root: str, job_id: str) -> None:  # pragma: no cover - thin wrapper over run_job

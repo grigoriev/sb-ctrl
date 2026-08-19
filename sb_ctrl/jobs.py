@@ -24,6 +24,22 @@ def new_job_id() -> str:
     return time.strftime("%Y%m%d-%H%M%S") + "-" + os.urandom(2).hex()
 
 
+def summary(spec: dict[str, Any]) -> dict[str, Any]:
+    """The parts of the plan a client shows beside the progress bar.
+
+    The release name is what tells two transfers of the same show apart, and
+    it carries the season the pack came from.
+    """
+    source = spec.get("source") or {}
+    release = str(source.get("base_rel", "")).rstrip("/").rsplit("/", 1)[-1]
+    return {
+        "kind": str(spec.get("kind", "")),
+        "release": release,
+        "size": int(source.get("size", 0)),
+        "dest": str(spec.get("dest_path", "")),
+    }
+
+
 def create_job(staging_root: str, spec: dict[str, Any], job_id: str | None = None) -> Path:
     """Create the job directory, write its spec, and mark it queued."""
     job_id = job_id or new_job_id()
@@ -31,7 +47,7 @@ def create_job(staging_root: str, spec: dict[str, Any], job_id: str | None = Non
     job.mkdir(parents=True, exist_ok=True)
     spec = {**spec, "id": job_id}
     (job / "spec.json").write_text(json.dumps(spec, indent=2))
-    write_state(job, state="queued", pct=0)
+    write_state(job, state="queued", pct=0, created=int(time.time()), **summary(spec))
     return job
 
 
