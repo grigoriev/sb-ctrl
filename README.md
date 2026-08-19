@@ -58,7 +58,7 @@ uv run mypy sb_ctrl tests
 uv run pytest --cov --cov-report=term-missing
 ```
 
-Python 3.12+. FastAPI + uvicorn.
+Python 3.14+. FastAPI + uvicorn.
 
 ## Status
 

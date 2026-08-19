@@ -12,7 +12,7 @@ python3 -m venv ~/.local/sb-ctrl-venv
 # or, from a checkout:  pip install .
 ```
 
-Requires Python 3.12+ and `lftp` on the host.
+Requires Python 3.14+ and `lftp` on the host.
 
 ## 2. Configure
 
