@@ -39,6 +39,9 @@ _TAG = re.compile(
 FetchFn = Callable[[str, dict[str, str]], dict[str, Any]]
 
 
+POSTER_BASE = "https://image.tmdb.org/t/p/w154"
+
+
 @dataclass(frozen=True)
 class Candidate:
     tmdb_id: int
@@ -48,6 +51,7 @@ class Candidate:
     year: str
     overview: str
     is_animation: bool
+    poster: str = ""
 
     @property
     def kind(self) -> str:
@@ -114,7 +118,13 @@ class TMDb:
             year=str(date)[:4],
             overview=str(r.get("overview", "")),
             is_animation=ANIMATION_GENRE in genres,
+            poster=_poster(r.get("poster_path")),
         )
+
+
+def _poster(path: Any) -> str:
+    """The full poster URL, or an empty string when the title has no image."""
+    return f"{POSTER_BASE}{path}" if path else ""
 
 
 def _usable(r: dict[str, Any]) -> bool:
