@@ -13,7 +13,7 @@ from pathlib import Path
 
 from sb_ctrl.config import DEFAULT_SKIP_PATTERNS, DEFAULT_SUB_EXT, DEFAULT_VIDEO_EXT
 
-_EPISODE = re.compile(r"[Ss](\d{1,2})[Ee](\d{1,2})|(\d{1,2})x(\d{1,2})|\b(\d)(\d\d)\b")
+_EPISODE = re.compile(r"[Ss](\d{1,2})[\s._-]*[Ee](\d{1,2})|(\d{1,2})x(\d{1,2})|\b(\d)(\d\d)\b")
 
 
 def parse_episode(name: str) -> tuple[int, int] | None:

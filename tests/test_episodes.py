@@ -8,6 +8,10 @@ from sb_ctrl.episodes import episode_targets, parse_episode
 def test_parse_episode_formats() -> None:
     assert parse_episode("Show.S01E02.mkv") == (1, 2)
     assert parse_episode("show s1e5") == (1, 5)
+    assert parse_episode("Show.S01.E02.mkv") == (1, 2)
+    assert parse_episode("Show S01 E02.mkv") == (1, 2)
+    assert parse_episode("Show-S01-E02.mkv") == (1, 2)
+    assert parse_episode("Show.S01.Extras.mkv") is None
     assert parse_episode("Show 3x08.mkv") == (3, 8)
     assert parse_episode("Show 102.mkv") == (1, 2)
     assert parse_episode("Show.mkv") is None
