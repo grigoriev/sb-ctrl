@@ -202,6 +202,9 @@ def run_job(job_dir: Path, *, transfer: Transfer = default_transfer, chowner: Ch
 
         transfer(spec, item, progress)
         seasons = _finalize(spec, item, chowner)
+        # The delivery emptied staging of everything worth keeping. What is left
+        # is the pack directory and its junk, so it goes with the job.
+        shutil.rmtree(staging, ignore_errors=True)
         write_state(job_dir, state="done", pct=100, seasons=seasons, finished=int(time.time()))
     except Exception as exc:  # noqa: BLE001 - any failure becomes a failed job
         write_state(job_dir, state="failed", error=str(exc), finished=int(time.time()))

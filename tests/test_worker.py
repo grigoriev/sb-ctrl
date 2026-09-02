@@ -119,6 +119,7 @@ def test_series_pack_lays_out_episodes(tmp_path: Path) -> None:
     assert state["state"] == "done"
     assert state["seasons"] == [{"season": 1, "episodes": 2}]
     assert state["finished"] > 0
+    assert not (tmp_path / "staging" / ".staging" / "J5").exists()
 
 
 def test_failure_records_error(tmp_path: Path) -> None:
@@ -134,6 +135,8 @@ def test_failure_records_error(tmp_path: Path) -> None:
     state = read_state(job)
     assert state["state"] == "failed"
     assert state["error"] == "lftp died"
+    # a retry resumes from what the failed transfer already pulled
+    assert (tmp_path / "staging" / ".staging" / "J4").is_dir()
 
 
 # --- progress ------------------------------------------------------------
