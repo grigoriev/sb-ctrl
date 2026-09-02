@@ -14,7 +14,9 @@ from typing import Any
 from urllib.parse import quote, urlsplit, urlunsplit
 
 RpcRow = list[Any]
-CallFn = Callable[..., list[RpcRow]]
+# a call answers with rows, and system.multicall answers with a fault dict for
+# any member call that failed, so the entries are not all rows
+CallFn = Callable[..., list[Any]]
 
 _FIELDS = [
     "d.hash=",
@@ -74,6 +76,22 @@ class RTorrent:
         if idx == -1:
             return base_path.lstrip("/")
         return base_path[idx + 1 :]
+
+    def file_list(self, hashes: list[str]) -> dict[str, list[tuple[int, str]]]:
+        """The size and path of every file of each torrent, in one request.
+
+        The sizes are what match a release against the library, and asking
+        per torrent would mean a round trip each. A torrent whose files
+        cannot be read comes back with an empty list.
+        """
+        if not hashes:
+            return {}
+        calls = [{"methodName": "f.multicall", "params": [h, "", "f.size_bytes=", "f.path="]} for h in hashes]
+        rows = self._call("system.multicall", calls)
+        out: dict[str, list[tuple[int, str]]] = {}
+        for h, result in zip(hashes, rows, strict=False):
+            out[h] = [(int(entry[0]), str(entry[1])) for entry in result[0]] if isinstance(result, list) else []
+        return out
 
     def list_completed(self) -> list[Torrent]:
         rows = self._call("d.multicall2", "", "main", *_FIELDS)

@@ -44,6 +44,8 @@ class Config:
     sftp_base: str = "files"
     tmdb_key: str = ""
     tmdb_lang: str = "en-US"
+    plex_url: str = ""
+    plex_token: str = ""
     root_movies: str = ""
     root_cartoons: str = ""
     root_series: str = ""
@@ -70,7 +72,7 @@ class Config:
     def as_dict(self) -> dict[str, Any]:
         """Return the config as a plain dict, with secrets redacted."""
         data = asdict(self)
-        for secret in ("rtorrent_pass", "tmdb_key", "api_token", "auth_password_hash", "auth_secret"):
+        for secret in ("rtorrent_pass", "tmdb_key", "plex_token", "api_token", "auth_password_hash", "auth_secret"):
             if data[secret]:
                 data[secret] = "***"
         return data
@@ -82,6 +84,7 @@ def from_dict(data: dict[str, Any]) -> Config:
     rt = data.get("rtorrent", {})
     sftp = data.get("sftp", {})
     tmdb = data.get("tmdb", {})
+    plex = data.get("plex", {})
     roots = data.get("roots", {})
     perms = data.get("perms", {})
     layout = data.get("layout", {})
@@ -98,6 +101,8 @@ def from_dict(data: dict[str, Any]) -> Config:
         sftp_base=sftp.get("base", base.sftp_base),
         tmdb_key=tmdb.get("key", base.tmdb_key),
         tmdb_lang=tmdb.get("lang", base.tmdb_lang),
+        plex_url=plex.get("url", base.plex_url),
+        plex_token=plex.get("token", base.plex_token),
         root_movies=roots.get("movies", base.root_movies),
         root_cartoons=roots.get("cartoons", base.root_cartoons),
         root_series=roots.get("series", base.root_series),

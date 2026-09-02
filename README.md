@@ -33,7 +33,7 @@ has no way in, and only the bearer token opens the API.
 ```
 GET  /me                  whether a login is needed, and who is logged in
 POST /login, /logout      start and end a browser session
-GET  /torrents            completed torrents (newest first)
+GET  /torrents            completed torrents (newest first), with what Plex holds
 POST /plan                preview a transfer for a torrent + kind
 POST /jobs                create and launch a transfer
 GET  /jobs, /jobs/{id}    job state / progress

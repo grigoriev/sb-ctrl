@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from sb_ctrl.rtorrent import RpcRow, RTorrent
 
 # hash, name, size, complete, base_path, is_multi, finished
@@ -48,3 +50,34 @@ def test_auth_url_embeds_credentials() -> None:
 def test_auth_url_without_user_is_unchanged() -> None:
     client = RTorrent("https://host/xmlrpc", "", "", "files")
     assert client._auth_url() == "https://host/xmlrpc"
+
+
+def test_file_list_asks_for_every_torrent_in_one_call() -> None:
+    seen: list[object] = []
+
+    def fake_call(method: str, *args: object) -> list[RpcRow]:
+        assert method == "system.multicall"
+        seen.append(args[0])
+        return [[[[100, "A/S01E01.mkv"], [200, "A/sample.mkv"]]], [[[300, "B.mkv"]]]]
+
+    client = RTorrent("https://x/xmlrpc", "u", "p", "files", call=fake_call)
+    assert client.file_list(["H1", "H2"]) == {
+        "H1": [(100, "A/S01E01.mkv"), (200, "A/sample.mkv")],
+        "H2": [(300, "B.mkv")],
+    }
+    assert len(seen) == 1
+
+
+def test_file_list_of_nothing_asks_nothing() -> None:
+    def fake_call(method: str, *args: object) -> list[RpcRow]:
+        raise AssertionError("no call expected")
+
+    assert RTorrent("https://x/xmlrpc", call=fake_call).file_list([]) == {}
+
+
+def test_file_list_survives_a_torrent_rtorrent_cannot_read() -> None:
+    def fake_call(method: str, *args: object) -> list[Any]:
+        return [{"faultCode": -501, "faultString": "no such torrent"}, [[[300, "B.mkv"]]]]
+
+    client = RTorrent("https://x/xmlrpc", call=fake_call)
+    assert client.file_list(["H1", "H2"]) == {"H1": [], "H2": [(300, "B.mkv")]}

@@ -17,6 +17,12 @@ base = "files"                    # remote dir that rTorrent base paths live und
 key  = "CHANGE_ME"
 lang = "en-US"
 
+[plex]
+# Read-only view of the library, plus a scan after each delivery. Leave the
+# section out and "already in the library" falls back to the job history.
+url   = "http://10.10.10.10:32400"
+token = "CHANGE_ME"                # X-Plex-Token of the server owner
+
 [roots]
 movies         = "/data/media/movies"
 cartoons       = "/data/media/cartoons"

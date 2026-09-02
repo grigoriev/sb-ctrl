@@ -149,6 +149,37 @@ def test_series_pack_lays_out_episodes(tmp_path: Path) -> None:
     assert (tmp_path / "series").stat().st_mode & 0o777 == 0o775
 
 
+def test_a_delivered_job_tells_the_media_server(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path, "flat")
+    spec = plan(cfg, {"name": "Film 2024", "size": 1, "is_multi": False, "base_rel": "files/Film.2024.mkv"}, "movie")[
+        "job_spec"
+    ]
+    job = create_job(cfg.staging_root, spec, job_id="J7")
+    scanned: list[str] = []
+
+    def transfer(spec: dict[str, Any], item: Path, progress: Any) -> None:
+        item.parent.mkdir(parents=True, exist_ok=True)
+        item.write_text("x")
+
+    _, chowner = _chowner_recorder()
+    run_job(job, transfer=transfer, chowner=chowner, scanner=lambda s: scanned.append(str(s["dest_path"])))
+    assert scanned == [str(tmp_path / "movies" / "Film 2024.mkv")]
+
+
+def test_a_failed_job_tells_the_media_server_nothing(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    spec = plan(cfg, {"name": "X", "size": 1, "is_multi": True, "base_rel": "files/X"}, "series")["job_spec"]
+    job = create_job(cfg.staging_root, spec, job_id="J8")
+    scanned: list[str] = []
+
+    def transfer(spec: dict[str, Any], item: Path, progress: Any) -> None:
+        raise RuntimeError("lftp died")
+
+    _, chowner = _chowner_recorder()
+    run_job(job, transfer=transfer, chowner=chowner, scanner=lambda s: scanned.append("scan"))
+    assert scanned == []
+
+
 def test_failure_records_error(tmp_path: Path) -> None:
     cfg = _cfg(tmp_path)
     spec = plan(cfg, {"name": "X", "size": 1, "is_multi": True, "base_rel": "files/X"}, "series")["job_spec"]
