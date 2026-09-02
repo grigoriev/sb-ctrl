@@ -131,6 +131,16 @@ def _apply_perms(root: Path, perms: dict[str, Any], chowner: Chowner) -> None:
             chowner(path, owner, group)
 
 
+def _new_parents(path: Path) -> list[Path]:
+    """The directories above ``path`` that do not exist yet, outermost first.
+
+    A directory the delivery creates gets the configured mode and owner like
+    everything else. Without that it keeps root's umask, and Plex cannot
+    delete what sits inside it.
+    """
+    return [parent for parent in reversed(path.parents) if not parent.exists()]
+
+
 def season_summary(targets: Iterable[tuple[Path, str]]) -> list[dict[str, int]]:
     """How many distinct episodes landed in each season.
 
@@ -148,6 +158,7 @@ def season_summary(targets: Iterable[tuple[Path, str]]) -> list[dict[str, int]]:
 
 def _finalize_episodes(spec: dict[str, Any], item: Path, chowner: Chowner) -> list[dict[str, int]]:
     show_dir = spec["dest_path"]
+    created = _new_parents(Path(show_dir))
     files = spec.get("files") or {}
     targets = episodes.episode_targets(
         item,
@@ -164,6 +175,8 @@ def _finalize_episodes(spec: dict[str, Any], item: Path, chowner: Chowner) -> li
         if dest.exists():
             dest.unlink()
         os.replace(src, dest)
+    for directory in created:
+        _apply_perms(directory, spec["perms"], chowner)
     _apply_perms(Path(show_dir), spec["perms"], chowner)
     return season_summary(targets)
 
@@ -174,6 +187,7 @@ def _finalize(spec: dict[str, Any], item: Path, chowner: Chowner) -> list[dict[s
         return _finalize_episodes(spec, item, chowner)
     _apply_perms(item, spec["perms"], chowner)
     dest = Path(spec["dest_path"])
+    created = _new_parents(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists():
         if dest.is_dir():
@@ -181,6 +195,8 @@ def _finalize(spec: dict[str, Any], item: Path, chowner: Chowner) -> list[dict[s
         else:
             dest.unlink()
     os.replace(item, dest)
+    for directory in created:
+        _apply_perms(directory, spec["perms"], chowner)
     return []
 
 
