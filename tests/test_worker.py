@@ -58,6 +58,9 @@ def test_folder_job_moves_into_library_and_sets_state(tmp_path: Path) -> None:
     assert state["pct"] == 100
     assert ("ep.mkv", "plex", "media") in calls
     assert (dest / "ep.mkv").stat().st_mode & 0o777 == 0o664
+    # the per-title directory is created here, so it carries the perms too
+    assert ("The Show S01", "plex", "media") in calls
+    assert dest.stat().st_mode & 0o777 == 0o775
 
 
 def test_single_file_job(tmp_path: Path) -> None:
@@ -75,6 +78,27 @@ def test_single_file_job(tmp_path: Path) -> None:
     run_job(job, transfer=transfer, chowner=chowner)
     assert (tmp_path / "movies" / "Film 2024.mkv").is_file()
     assert read_state(job)["state"] == "done"
+
+
+def test_single_file_movie_gets_a_usable_title_directory(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    spec = plan(cfg, {"name": "Film 2024", "size": 1, "is_multi": False, "base_rel": "files/Film.2024.mkv"}, "movie")[
+        "job_spec"
+    ]
+    job = create_job(cfg.staging_root, spec, job_id="J6")
+
+    def transfer(spec: dict[str, Any], item: Path, progress: Any) -> None:
+        item.parent.mkdir(parents=True, exist_ok=True)
+        item.write_text("x")
+
+    calls, chowner = _chowner_recorder()
+    run_job(job, transfer=transfer, chowner=chowner)
+
+    title = tmp_path / "movies" / "Film 2024"
+    assert (title / "Film 2024.mkv").is_file()
+    # the directory holds the film, so Plex needs to be able to write in it
+    assert title.stat().st_mode & 0o777 == 0o775
+    assert ("Film 2024", "plex", "media") in calls
 
 
 def test_overwrite_replaces_existing(tmp_path: Path) -> None:
@@ -109,7 +133,7 @@ def test_series_pack_lays_out_episodes(tmp_path: Path) -> None:
         (item / "The.Show.S01E02.mkv").write_text("v")
         (item / "The.Show.S01E01.en.srt").write_text("s")
 
-    _, chowner = _chowner_recorder()
+    calls, chowner = _chowner_recorder()
     run_job(job, transfer=transfer, chowner=chowner)
     season = tmp_path / "series" / "The Show" / "Season 01"
     assert (season / "S01E01.mkv").is_file()
@@ -120,6 +144,9 @@ def test_series_pack_lays_out_episodes(tmp_path: Path) -> None:
     assert state["seasons"] == [{"season": 1, "episodes": 2}]
     assert state["finished"] > 0
     assert not (tmp_path / "staging" / ".staging" / "J5").exists()
+    # the library root was created by this delivery and carries the perms
+    assert ("series", "plex", "media") in calls
+    assert (tmp_path / "series").stat().st_mode & 0o777 == 0o775
 
 
 def test_failure_records_error(tmp_path: Path) -> None:
