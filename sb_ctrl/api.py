@@ -9,13 +9,14 @@ from __future__ import annotations
 
 import dataclasses
 import hmac
+import xmlrpc.client
 from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Response
 from pydantic import BaseModel
 
-from sb_ctrl import __version__, auth, launcher, planner, tmdb
+from sb_ctrl import __version__, auth, launcher, planner, plex, tmdb
 from sb_ctrl.config import Config, load_config
 from sb_ctrl.jobs import (
     by_source,
@@ -170,13 +171,56 @@ def _with_job(item: dict[str, Any], index: dict[str, dict[str, Any]]) -> dict[st
     return {**item, "job": job, "delivered": delivered}
 
 
+_INDEXES: dict[tuple[str, str], plex.LibraryIndex] = {}
+
+
+def library_index(cfg: Config) -> plex.LibraryIndex:
+    """The cached view of the Plex library for this server, one per config."""
+    key = (cfg.plex_url, cfg.plex_token)
+    index = _INDEXES.get(key)
+    if index is None:
+        index = plex.LibraryIndex(plex.Plex(cfg.plex_url, cfg.plex_token))
+        _INDEXES[key] = index
+    return index
+
+
+def _with_library(items: list[dict[str, Any]], client: RTorrent, cfg: Config) -> list[dict[str, Any]]:
+    """Say which releases the library already holds, by file size.
+
+    A delivered file keeps its size, so the library answers this however the
+    file arrived, and stops answering it once the file is deleted. Without
+    Plex the job history answers instead, as it did before.
+    """
+    sizes = library_index(cfg).sizes()
+    if sizes is None:
+        return items
+    try:
+        files = client.file_list([str(item.get("hash", "")) for item in items])
+    except OSError, xmlrpc.client.Error:
+        return items
+    out = []
+    for item in items:
+        have, total = plex.match(
+            files.get(str(item.get("hash", "")), []),
+            sizes,
+            video_ext=cfg.video_ext,
+            skip_patterns=cfg.skip_patterns,
+        )
+        if total == 0:
+            out.append(item)
+            continue
+        out.append({**item, "library": {"have": have, "total": total}, "delivered": have == total})
+    return out
+
+
 def _add_library_routes(app: FastAPI) -> None:
     @app.get("/torrents", dependencies=[AuthDep])
     def torrents(cfg: ConfigDep) -> dict[str, Any]:
         reconcile(cfg.staging_root)
         index = by_source(list_jobs(cfg.staging_root))
-        items = [dataclasses.asdict(t) for t in _client(cfg).list_completed()]
-        return {"items": [_with_job(item, index) for item in items]}
+        client = _client(cfg)
+        items = [_with_job(dataclasses.asdict(t), index) for t in client.list_completed()]
+        return {"items": _with_library(items, client, cfg)}
 
     @app.get("/search", dependencies=[AuthDep])
     def search(name: str, cfg: ConfigDep) -> dict[str, Any]:

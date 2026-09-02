@@ -15,7 +15,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
-from sb_ctrl import episodes, lftp
+from sb_ctrl import episodes, lftp, plex
 from sb_ctrl.config import DEFAULT_SKIP_PATTERNS, DEFAULT_SUB_EXT, DEFAULT_VIDEO_EXT
 from sb_ctrl.jobs import jobs_dir, log_path, read_spec, write_state
 
@@ -25,6 +25,8 @@ ProgressCb = Callable[[int, str, str], None]
 Transfer = Callable[[dict[str, Any], Path, ProgressCb], None]
 # chowner(path, owner, group)
 Chowner = Callable[[Path, str, str], None]
+# scanner(spec) tells the media server that something landed
+Scanner = Callable[[dict[str, Any]], None]
 
 # How often a running transfer reports how far it has got.
 PROGRESS_INTERVAL = 2.0
@@ -39,6 +41,12 @@ def default_chowner(path: Path, owner: str, group: str) -> None:  # pragma: no c
     uid = pwd.getpwnam(owner).pw_uid
     gid = grp.getgrnam(group).gr_gid
     os.chown(path, uid, gid)
+
+
+def default_scanner(spec: dict[str, Any]) -> None:
+    """Ask Plex to look at the library, so the delivery shows up at once."""
+    settings = spec.get("plex") or {}
+    plex.Plex(str(settings.get("url", "")), str(settings.get("token", ""))).try_scan()
 
 
 def path_size(path: Path) -> int:
@@ -200,7 +208,13 @@ def _finalize(spec: dict[str, Any], item: Path, chowner: Chowner) -> list[dict[s
     return []
 
 
-def run_job(job_dir: Path, *, transfer: Transfer = default_transfer, chowner: Chowner = default_chowner) -> None:
+def run_job(
+    job_dir: Path,
+    *,
+    transfer: Transfer = default_transfer,
+    chowner: Chowner = default_chowner,
+    scanner: Scanner = default_scanner,
+) -> None:
     """Execute a job: transfer, permission, move, and record state throughout."""
     spec = read_spec(job_dir)
     staging = Path(spec["staging_root"]) / ".staging" / spec["id"]
@@ -221,6 +235,7 @@ def run_job(job_dir: Path, *, transfer: Transfer = default_transfer, chowner: Ch
         # The delivery emptied staging of everything worth keeping. What is left
         # is the pack directory and its junk, so it goes with the job.
         shutil.rmtree(staging, ignore_errors=True)
+        scanner(spec)
         write_state(job_dir, state="done", pct=100, seasons=seasons, finished=int(time.time()))
     except Exception as exc:  # noqa: BLE001 - any failure becomes a failed job
         write_state(job_dir, state="failed", error=str(exc), finished=int(time.time()))

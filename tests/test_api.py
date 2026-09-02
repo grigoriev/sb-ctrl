@@ -346,3 +346,67 @@ def test_torrents_stay_bare_without_a_job(tmp_path: Path, monkeypatch: pytest.Mo
     item = _client(Config(staging_root=str(tmp_path))).get("/torrents").json()["items"][0]
     assert "job" not in item
     assert "delivered" not in item
+
+
+class _FakeRTFiles(_FakeRT):
+    """A seedbox that also answers what files each torrent holds."""
+
+    def file_list(self, hashes: list[str]) -> dict[str, list[tuple[int, str]]]:
+        return {"H1": [(100, "Movie.mkv"), (7, "sample.mkv")]}
+
+
+class _StubIndex:
+    def __init__(self, sizes: dict[int, str] | None) -> None:
+        self._sizes = sizes
+
+    def sizes(self) -> dict[int, str] | None:
+        return self._sizes
+
+
+def _with_library_index(monkeypatch: pytest.MonkeyPatch, sizes: dict[int, str] | None) -> None:
+    monkeypatch.setattr(api, "RTorrent", _FakeRTFiles)
+    monkeypatch.setattr(api, "library_index", lambda cfg: _StubIndex(sizes))
+
+
+def test_torrents_read_delivery_from_the_library(monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_library_index(monkeypatch, {100: "/media/movies/Movie/Movie.mkv"})
+    item = _client(Config()).get("/torrents").json()["items"][0]
+    # no job at all, and the file is in Plex: that is what counts
+    assert item["delivered"] is True
+    assert item["library"] == {"have": 1, "total": 1}
+
+
+def test_torrents_report_a_pack_the_library_holds_in_part(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Pack(_FakeRT):
+        def file_list(self, hashes: list[str]) -> dict[str, list[tuple[int, str]]]:
+            return {"H1": [(100, "S01E01.mkv"), (200, "S01E02.mkv")]}
+
+    monkeypatch.setattr(api, "RTorrent", _Pack)
+    monkeypatch.setattr(api, "library_index", lambda cfg: _StubIndex({100: "/media/series/X/S01E01.mkv"}))
+    item = _client(Config()).get("/torrents").json()["items"][0]
+    assert item["library"] == {"have": 1, "total": 2}
+    assert item["delivered"] is False
+
+
+def test_torrents_fall_back_to_the_job_when_plex_is_silent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_library_index(monkeypatch, None)
+    cfg = Config(staging_root=str(tmp_path))
+    dest = tmp_path / "movies" / "Movie"
+    dest.mkdir(parents=True)
+    job = create_job(cfg.staging_root, {"name": "Movie", "source": {"hash": "H1"}}, job_id="J50")
+    write_state(job, state="done", pct=100, dest=str(dest))
+    item = _client(cfg).get("/torrents").json()["items"][0]
+    assert item["delivered"] is True
+    assert "library" not in item
+
+
+def test_torrents_survive_a_seedbox_that_cannot_list_files(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Broken(_FakeRT):
+        def file_list(self, hashes: list[str]) -> dict[str, list[tuple[int, str]]]:
+            raise OSError("no route")
+
+    monkeypatch.setattr(api, "RTorrent", _Broken)
+    monkeypatch.setattr(api, "library_index", lambda cfg: _StubIndex({100: "x"}))
+    item = _client(Config()).get("/torrents").json()["items"][0]
+    assert item["name"] == "Movie"
+    assert "library" not in item

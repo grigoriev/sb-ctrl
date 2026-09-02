@@ -50,6 +50,8 @@ point.
 | `sftp.base` | remote base dir mapped from rTorrent paths | `files` |
 | `tmdb.key` | TMDb API key | `[TBD]` |
 | `tmdb.lang` | search/UI language hint (naming still uses original_title) | `en-US` |
+| `plex.url` | Plex server the library is read from | none |
+| `plex.token` | Plex token, read-only use plus a scan request | none |
 | `roots.movies` / `.cartoons` / `.series` / `.cartoon_series` | 4 library roots | `[TBD]` |
 | `perms.owner` / `.group` | target ownership | `[TBD]` |
 | `perms.dir_mode` / `.file_mode` | target modes | `[TBD]` (suggest 775 / 664) |
@@ -78,7 +80,7 @@ works. TLS is terminated by a reverse proxy (see Deployment).
 | Method + path | Body / params | Result |
 |---|---|---|
 | `GET /health` | — | `{ok, version}` (no auth) |
-| `GET /torrents` | — | `{items:[{hash,name,size,is_multi,base_rel,finished,...}]}` completed, newest first |
+| `GET /torrents` | — | `{items:[{hash,name,size,is_multi,base_rel,finished,job?,delivered,library?}]}` completed, newest first |
 | `GET /torrents/{hash}/files` | — | `{files:[{index,path,size,done}]}` *(later phase)* |
 | `GET /search` | `kind`, `name` | `{guess_kind, candidates:[...]}` *(TMDb phase)* |
 | `POST /plan` | `{hash, kind, name?}` | `{job_spec, dest_path, collision}` (preview, no side effects) |
@@ -115,7 +117,33 @@ CLI for admin and debugging.
 - **Path mapping:** `d.base_path` (absolute on whatbox, e.g.
   `/home/<user>/files/<Title>`) → strip the home prefix → `files/<Title>` (this is
   `base_rel`) → lftp `cd files; mirror <Title>` (folder) / `get <Title>` (file).
-- File subset: `f.multicall` on the hash for per-file path/size/completed.
+- File subset: `f.multicall` on the hash for per-file path/size/completed. One
+  `system.multicall` carries the request for every torrent of the list.
+
+---
+
+## 5a. Plex integration
+
+The torrent list says which releases the library already holds. The answer
+comes from Plex, not from the job history.
+
+- **Index:** `/library/sections`, then `/library/sections/{key}/all` with
+  `type=1` for movie sections and `type=4` for show sections. Every `Part`
+  gives a file path and a byte size. The index is re-read at most every 30
+  seconds, because the list is polled.
+- **Match by size.** A delivery copies bytes, so a file keeps its size from
+  the seedbox to the library. A release counts as delivered when the library
+  holds every one of its video files; a season pack that landed in part
+  reports `library: {have, total}`. Junk the delivery would skip (a sample, a
+  text file) is not counted.
+- **Why not the job history.** A job is a record of work, and deleting one
+  used to erase the knowledge that a title had arrived. The library answers
+  for files that arrived any other way too, and stops answering once somebody
+  deletes the file from Plex.
+- **Fallback.** With no `[plex]` section, or a server that cannot be reached,
+  the older job-based answer is used, so the list still works.
+- **After a delivery** the worker asks Plex to scan, so the title shows up at
+  once instead of at the next periodic scan.
 
 ---
 

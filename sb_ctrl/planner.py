@@ -71,5 +71,6 @@ def plan(cfg: Config, torrent: dict[str, Any], kind: str, name: str | None = Non
             "skip_patterns": cfg.skip_patterns,
         },
         "staging_root": cfg.staging_root,
+        "plex": {"url": cfg.plex_url, "token": cfg.plex_token},
     }
     return {"job_spec": spec, "dest_path": dest_path, "collision": os.path.exists(dest_path)}
