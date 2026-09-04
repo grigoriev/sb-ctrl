@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime
 import json
 import re
+import unicodedata
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
@@ -46,6 +47,16 @@ FetchFn = Callable[[str, dict[str, str]], dict[str, Any]]
 POSTER_BASE = "https://image.tmdb.org/t/p/w154"
 
 
+def readable(text: str) -> bool:
+    """Whether a title is written in a script this library is written in.
+
+    The library is named in Latin and Cyrillic. A title in Japanese or Hindi
+    is correct but unreadable here, and a folder nobody can type is worse
+    than one named after the same film in English.
+    """
+    return all(not ch.isalpha() or unicodedata.name(ch, "").startswith(("LATIN", "CYRILLIC")) for ch in text)
+
+
 @dataclass(frozen=True)
 class Candidate:
     tmdb_id: int
@@ -56,6 +67,8 @@ class Candidate:
     overview: str
     is_animation: bool
     poster: str = ""
+    # what the library should call it; see ``name_titles``
+    name: str = ""
 
     @property
     def kind(self) -> str:
@@ -128,6 +141,23 @@ class TMDb:
         results = data.get("results", [])
         return [self._candidate(r) for r in results if _usable(r)]
 
+    def name_titles(self, candidates: list[Candidate], query: str, media: str) -> list[Candidate]:
+        """Give each candidate the name the library should use.
+
+        The original title comes first, because that is what the library is
+        named by. When it is written in another script, the English catalogue
+        names the same film in a way this library can carry. One extra
+        request, and only when a title needs it.
+        """
+        named = [replace(c, name=c.original_title) for c in candidates if readable(c.original_title)]
+        foreign = [c for c in candidates if not readable(c.original_title)]
+        if not foreign:
+            return named if len(named) == len(candidates) else candidates
+        english = {c.tmdb_id: c.title for c in self.search(query, media, lang=FALLBACK_LANG)}
+        by_id = {c.tmdb_id: replace(c, name=english.get(c.tmdb_id) or c.title or c.original_title) for c in foreign}
+        by_id.update({c.tmdb_id: c for c in named})
+        return [by_id[c.tmdb_id] for c in candidates]
+
     def fill_overviews(self, candidates: list[Candidate], query: str, media: str) -> list[Candidate]:
         """Fill an empty overview from the English catalogue.
 
@@ -188,4 +218,5 @@ def search_for(client: TMDb, name: str) -> dict[str, Any]:
         candidates = client.search(query, media)
     if any(not c.overview for c in candidates):
         candidates = client.fill_overviews(candidates, query, media)
+    candidates = client.name_titles(candidates, query, media)
     return {"guess": hint, "candidates": candidates}

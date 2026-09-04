@@ -154,7 +154,9 @@ comes from Plex, not from the job history.
   TMDb genre **Animation (16)** → Cartoons / Cartoon-series, else Movies / Series.
 - **Search** (movie or tv) → candidates; the Mac shows them and the user confirms.
   Fallback: manual title + year (no TMDb id).
-- **Naming source:** always `original_title` (Russian films keep Russian). Year
+- **Naming source:** `original_title` (Russian films keep Russian), unless it
+  is written in a script the library is not: a Japanese or Korean title is
+  taken from the English catalogue instead, so the folder stays readable. Year
   from `release_date` / `first_air_date`.
 - **TV episode mapping:** parse `S01E02` / `s01e02` / `1x02` / joined `0102`/`101`
   from source filenames. Unmatched → flagged for manual entry or skip. Exotic

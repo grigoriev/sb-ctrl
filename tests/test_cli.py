@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,9 @@ class _FakeTMDb:
 
     def search(self, query: str, media: str = "multi", lang: str = "", year: str = "") -> list[Candidate]:
         return [Candidate(7, "movie", "T", "Orig", "2020", "o", False)]
+
+    def name_titles(self, candidates: list[Candidate], query: str, media: str) -> list[Candidate]:
+        return [replace(c, name=c.original_title) for c in candidates]
 
 
 def _write_cfg(tmp_path: Path) -> Path:
