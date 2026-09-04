@@ -158,8 +158,12 @@ comes from Plex, not from the job history.
   is written in a script the library is not: a Japanese or Korean title is
   taken from the English catalogue instead, so the folder stays readable. Year
   from `release_date` / `first_air_date`.
-- **TV episode mapping:** parse `S01E02` / `s01e02` / `1x02` / joined `0102`/`101`
-  from source filenames. Unmatched → flagged for manual entry or skip. Exotic
+- **TV episode mapping:** read `S01E02` / `s01e02` / `1x02` from the file name
+  first; failing that, take the season from the folder the file sits in
+  (`S01 - Arc`, `Season 2`, `Сезон 2`) and the number the file name starts
+  with; failing that, the joined `0102`/`101`. A season that arrives in parts
+  (`S02.1`, `S02.2`) is numbered as one run. Two files that read as the same
+  episode leave the second where it is. Unmatched → flagged for manual entry or skip. Exotic
   patterns added later.
 
 ---

@@ -17,6 +17,7 @@ from typing import Any
 
 from sb_ctrl import episodes, lftp, plex
 from sb_ctrl.config import DEFAULT_SKIP_PATTERNS, DEFAULT_SUB_EXT, DEFAULT_VIDEO_EXT
+from sb_ctrl.episodes import ext_set
 from sb_ctrl.jobs import jobs_dir, log_path, read_spec, write_state
 
 # progress(pct, rate, eta)
@@ -189,6 +190,20 @@ def _finalize_episodes(spec: dict[str, Any], item: Path, chowner: Chowner) -> li
     return season_summary(targets)
 
 
+def clear_staging(staging: Path, files: dict[str, Any]) -> int:
+    """Drop what the delivery left behind, and report what it would not drop.
+
+    A pack can hold a file the layout did not recognise, and on this side that
+    is the only copy of it. Junk goes with the directory; media keeps it, so
+    nothing is thrown away because a name could not be read.
+    """
+    keep = ext_set(files.get("video_ext", DEFAULT_VIDEO_EXT)) | ext_set(files.get("sub_ext", DEFAULT_SUB_EXT))
+    left = [p for p in staging.rglob("*") if p.is_file() and p.suffix.lower() in keep]
+    if not left:
+        shutil.rmtree(staging, ignore_errors=True)
+    return len(left)
+
+
 def _finalize(spec: dict[str, Any], item: Path, chowner: Chowner) -> list[dict[str, int]]:
     """Deliver the staged item and report the seasons it held, if any."""
     if spec.get("mode") == "episodes":
@@ -232,11 +247,9 @@ def run_job(
 
         transfer(spec, item, progress)
         seasons = _finalize(spec, item, chowner)
-        # The delivery emptied staging of everything worth keeping. What is left
-        # is the pack directory and its junk, so it goes with the job.
-        shutil.rmtree(staging, ignore_errors=True)
+        left = clear_staging(staging, spec.get("files") or {})
         scanner(spec)
-        write_state(job_dir, state="done", pct=100, seasons=seasons, finished=int(time.time()))
+        write_state(job_dir, state="done", pct=100, seasons=seasons, left=left, finished=int(time.time()))
     except Exception as exc:  # noqa: BLE001 - any failure becomes a failed job
         write_state(job_dir, state="failed", error=str(exc), finished=int(time.time()))
 
