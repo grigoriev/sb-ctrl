@@ -160,10 +160,12 @@ comes from Plex, not from the job history.
   from `release_date` / `first_air_date`.
 - **TV episode mapping:** read `S01E02` / `s01e02` / `1x02` from the file name
   first; failing that, take the season from the folder the file sits in
-  (`S01 - Arc`, `Season 2`, `Сезон 2`) and the number the file name starts
-  with; failing that, the joined `0102`/`101`. A season that arrives in parts
-  (`S02.1`, `S02.2`) is numbered as one run. Two files that read as the same
-  episode leave the second where it is. Unmatched → flagged for manual entry or skip. Exotic
+  (`S01 - Arc`, `Show [S01 2024]`, `Season 2`, `Сезон 2`) and the first plain
+  number in the file name once the bracketed tags are dropped; failing that,
+  the joined `0102`/`101`. A season is renumbered from one when it arrived in
+  parts (`S02.1`, `S02.2`) or when the pack counted it on from the season
+  before. Two files that read as the same episode leave the second where it
+  is. Unmatched → flagged for manual entry or skip. Exotic
   patterns added later.
 
 ---

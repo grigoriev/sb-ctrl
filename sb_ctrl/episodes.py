@@ -10,6 +10,7 @@ skip patterns come from the config.
 
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -21,10 +22,13 @@ from sb_ctrl.config import DEFAULT_SKIP_PATTERNS, DEFAULT_SUB_EXT, DEFAULT_VIDEO
 _MARKED = re.compile(r"[Ss](\d{1,2})[\s._-]*[Ee](\d{1,3})|\b(\d{1,2})x(\d{1,2})\b")
 # 102 for season 1, episode 2: an old convention, and the weakest reading
 _JOINED = re.compile(r"\b(\d)(\d\d)\b")
-# "S01 - Unwavering Resolve", "Season 2", "Сезон 2", and "S02.1" for a part
-_SEASON_FOLDER = re.compile(r"^(?:[Ss]|[Ss]eason\s*|[Сс]езон\s*)(\d{1,2})(?:\.(\d+))?(?!\d)")
-# "01 - Cruelty.mp4", "12. Title.mkv"
-_LEADING_NUMBER = re.compile(r"^(\d{1,3})(?!\d)")
+# "S01 - Unwavering Resolve", "Show [S01 2024]", "Season 2", "Сезон 2", and
+# "S02.1" for one part of a season
+_SEASON_FOLDER = re.compile(r"(?:\b[Ss]|\b[Ss]eason\s*|\b[Сс]езон\s*)(\d{1,2})(?:\.(\d+))?(?!\d)")
+# what a release writes in brackets is about the encode, never the episode
+_BRACKETS = re.compile(r"\[[^\]]*\]|\([^)]*\)")
+# the first plain number left after that, and a year is not one
+_PLAIN_NUMBER = re.compile(r"(?<!\d)(\d{1,3})(?!\d)")
 
 
 @dataclass(frozen=True)
@@ -56,13 +60,28 @@ def parse_episode(name: str) -> tuple[int, int] | None:
 def season_of(folder: str) -> tuple[int, int] | None:
     """The season a folder names, and which part of it, or None.
 
-    A season split into arcs arrives as ``S02.1`` and ``S02.2``; both are
-    season two, and the part says which comes first.
+    The mark sits where the release put it: at the front in ``S01 - Arc``,
+    inside the name in ``Ore dake Level Up na Ken [S01 2024]``. A season split
+    into arcs arrives as ``S02.1`` and ``S02.2``; both are season two, and the
+    part says which comes first.
     """
-    match = _SEASON_FOLDER.match(folder)
+    match = _SEASON_FOLDER.search(folder)
     if match is None:
         return None
     return int(match.group(1)), int(match.group(2) or 1)
+
+
+def number_in(name: str) -> int | None:
+    """The episode number a file name carries, when nothing marks it.
+
+    A release name is mostly about the encode, and all of that is bracketed:
+    ``[Xspitfire911] Ore dake Level Up na Ken 01 [BDRip 1080p x265 FLAC]``.
+    With the brackets gone the number left is the episode.
+    """
+    plain = _BRACKETS.sub(" ", os.path.splitext(name)[0])
+    for found in _PLAIN_NUMBER.finditer(plain):
+        return int(found.group(1))
+    return None
 
 
 def ext_set(items: Iterable[str]) -> set[str]:
@@ -82,20 +101,38 @@ def _place(path: Path, folders: tuple[str, ...]) -> _Found | None:
     marked = _marked(path.name)
     if marked:
         return _Found(marked[0], season_part[1] if season_part else 1, marked[1], path)
-    leading = _LEADING_NUMBER.match(path.name)
-    if season_part and leading:
-        return _Found(season_part[0], season_part[1], int(leading.group(1)), path)
+    number = number_in(path.name)
+    if season_part and number is not None:
+        return _Found(season_part[0], season_part[1], number, path)
     joined = _joined(path.name)
     return _Found(joined[0], 1, joined[1], path) if joined else None
 
 
-def _renumber(found: list[_Found]) -> list[_Found]:
-    """Number a season that arrived in parts as one run of episodes.
+def _in_parts(found: list[_Found], season: int) -> bool:
+    """Whether this season arrived as ``S02.1`` and ``S02.2``, not as one folder."""
+    return len({f.part for f in found if f.season == season}) > 1
 
-    ``S02.1`` holds seven episodes and ``S02.2`` starts again at one. They are
-    one season of eighteen, so the second part continues where the first ends.
+
+def _counts_on(found: list[_Found], season: int) -> bool:
+    """Whether this season keeps counting where the one before it stopped.
+
+    A pack numbers ``S02`` from thirteen when season one ended at twelve. The
+    catalogue counts each season from one, so such a season is renumbered. A
+    season that merely starts late, with no season before it in the pack, is
+    left alone: those episodes really are numbered that way.
     """
-    seasons = {f.season for f in found if len({g.part for g in found if g.season == f.season}) > 1}
+    numbers = [f.number for f in found if f.season == season]
+    earlier = [f.number for f in found if f.season == season - 1]
+    return bool(numbers) and bool(earlier) and min(numbers) == max(earlier) + 1
+
+
+def _renumber(found: list[_Found]) -> list[_Found]:
+    """Give a season the numbers the catalogue counts it by.
+
+    Two shapes need it: a season that arrived in arcs, where the second arc
+    starts again at one, and a season the pack numbered on from the last one.
+    """
+    seasons = {f.season for f in found if _in_parts(found, f.season) or _counts_on(found, f.season)}
     out = [f for f in found if f.season not in seasons]
     for season in seasons:
         run = sorted((f for f in found if f.season == season), key=lambda f: (f.part, f.number))

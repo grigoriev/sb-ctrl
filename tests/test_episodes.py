@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sb_ctrl.episodes import episode_targets, parse_episode, season_of
+from sb_ctrl.episodes import episode_targets, number_in, parse_episode, season_of
 
 
 def test_parse_episode_formats() -> None:
@@ -102,3 +102,49 @@ def test_season_of_reads_the_forms_a_pack_uses() -> None:
     assert season_of("Сезон 4") == (4, 1)
     assert season_of("Shorts") is None
     assert season_of("Swordsmith Village") is None
+
+
+def test_a_release_with_the_number_in_the_middle(tmp_path: Path) -> None:
+    """An anime release: the season is bracketed in the folder, the number is not."""
+    pack = tmp_path / "pack"
+    (pack / "Ore dake Level Up na Ken [S01 2024]").mkdir(parents=True)
+    for n in (1, 2):
+        name = f"[Xspitfire911] Ore dake Level Up na Ken {n:02d} [BDRip 1080p x265 FLAC].mkv"
+        (pack / "Ore dake Level Up na Ken [S01 2024]" / name).write_text("v")
+
+    targets = sorted(dest for _, dest in episode_targets(pack, "/lib/Show"))
+    assert targets == ["/lib/Show/Season 01/S01E01.mkv", "/lib/Show/Season 01/S01E02.mkv"]
+
+
+def test_a_season_numbered_on_from_the_last_one_starts_at_one(tmp_path: Path) -> None:
+    pack = tmp_path / "pack"
+    for folder, numbers in (("Show [S01 2024]", (1, 2, 3)), ("Show [S02 2025]", (4, 5))):
+        (pack / folder).mkdir(parents=True)
+        for n in numbers:
+            (pack / folder / f"[Group] Show {n:02d} [BDRip].mkv").write_text("v")
+
+    targets = sorted(dest for _, dest in episode_targets(pack, "/lib/Show"))
+    assert targets == [
+        "/lib/Show/Season 01/S01E01.mkv",
+        "/lib/Show/Season 01/S01E02.mkv",
+        "/lib/Show/Season 01/S01E03.mkv",
+        "/lib/Show/Season 02/S02E01.mkv",
+        "/lib/Show/Season 02/S02E02.mkv",
+    ]
+
+
+def test_a_season_that_starts_late_on_its_own_keeps_its_numbers(tmp_path: Path) -> None:
+    """Half a season is half a season, not a season renumbered from one."""
+    pack = tmp_path / "pack"
+    (pack / "Show [S01 2024]").mkdir(parents=True)
+    for n in (5, 6):
+        (pack / "Show [S01 2024]" / f"[Group] Show {n:02d} [BDRip].mkv").write_text("v")
+
+    targets = sorted(dest for _, dest in episode_targets(pack, "/lib/Show"))
+    assert targets == ["/lib/Show/Season 01/S01E05.mkv", "/lib/Show/Season 01/S01E06.mkv"]
+
+
+def test_number_in_skips_what_the_brackets_say() -> None:
+    assert number_in("[Xspitfire911] Ore dake Level Up na Ken 07 [BDRip 1080p x265 FLAC].mkv") == 7
+    assert number_in("01 - Cruelty.mp4") == 1
+    assert number_in("[Group] Show [BDRip 1080p].mkv") is None
