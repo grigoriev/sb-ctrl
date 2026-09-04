@@ -180,6 +180,29 @@ def test_a_failed_job_tells_the_media_server_nothing(tmp_path: Path) -> None:
     assert scanned == []
 
 
+def test_a_file_the_layout_could_not_read_stays_in_staging(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    spec = plan(cfg, {"name": "The Show", "size": 4, "is_multi": True, "base_rel": "files/The Show"}, "series")[
+        "job_spec"
+    ]
+    job = create_job(cfg.staging_root, spec, job_id="J9")
+
+    def transfer(spec: dict[str, Any], item: Path, progress: Any) -> None:
+        item.mkdir(parents=True, exist_ok=True)
+        (item / "The.Show.S01E01.mkv").write_text("v")
+        (item / "a name nothing can read.mkv").write_text("v")
+        (item / "readme.nfo").write_text("junk")
+
+    _, chowner = _chowner_recorder()
+    run_job(job, transfer=transfer, chowner=chowner)
+
+    assert (tmp_path / "series" / "The Show" / "Season 01" / "S01E01.mkv").is_file()
+    # the unread file is the only copy on this side, so it is not thrown away
+    staged = tmp_path / "staging" / ".staging" / "J9" / "The Show"
+    assert (staged / "a name nothing can read.mkv").is_file()
+    assert read_state(job)["left"] == 1
+
+
 def test_failure_records_error(tmp_path: Path) -> None:
     cfg = _cfg(tmp_path)
     spec = plan(cfg, {"name": "X", "size": 1, "is_multi": True, "base_rel": "files/X"}, "series")["job_spec"]
