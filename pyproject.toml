@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sb-ctrl"
-version = "0.6.0"
+version = "0.7.0"
 description = "Seedbox to Plex pull agent: rTorrent + TMDb + lftp transfers, driven over SSH."
 readme = "README.md"
 license = "MIT"
