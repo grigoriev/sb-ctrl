@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sb_ctrl.tmdb import Candidate, TMDb, guess, search_for
+from sb_ctrl.tmdb import Candidate, TMDb, guess, readable, search_for
 
 
 def test_guess_movie() -> None:
@@ -103,6 +103,9 @@ class _Recorder:
         if media != self.hit:
             return []
         return [Candidate(7, "movie", "T", "Orig", "2020", "o", False)]
+
+    def name_titles(self, candidates: list[Candidate], query: str, media: str) -> list[Candidate]:
+        return candidates
 
 
 def test_search_for_uses_the_guessed_media() -> None:
@@ -207,3 +210,45 @@ def test_search_for_drops_the_year_before_the_media_type() -> None:
         ("/search/multi", ""),
     ]
     assert len(result["candidates"]) == 1
+
+
+def test_readable_accepts_the_scripts_the_library_uses() -> None:
+    assert readable("Intouchables")
+    assert readable("Даун Хаус")
+    assert readable("Amélie 2001!")
+    assert not readable("劇場版「鬼滅の刃」")
+    assert not readable("기생충")
+
+
+def test_name_titles_keeps_a_title_the_library_can_carry() -> None:
+    ru = {"results": [{"id": 5, "title": "Довод", "original_title": "Tenet", "overview": "x"}]}
+    client = TMDb("k", lang="ru-RU", fetch=_by_language(ru, {"results": []}))
+    named = client.name_titles(client.search("x"), "x", "movie")
+    assert [c.name for c in named] == ["Tenet"]
+
+
+def test_name_titles_borrows_the_english_name_for_another_script() -> None:
+    ru = {"results": [{"id": 5, "title": "Паразиты", "original_title": "기생충", "overview": "x"}]}
+    en = {"results": [{"id": 5, "title": "Parasite", "original_title": "기생충", "overview": "x"}]}
+    client = TMDb("k", lang="ru-RU", fetch=_by_language(ru, en))
+    named = client.name_titles(client.search("x"), "x", "movie")
+    assert [c.name for c in named] == ["Parasite"]
+
+
+def test_name_titles_falls_back_to_the_translated_name() -> None:
+    ru = {"results": [{"id": 5, "title": "Паразиты", "original_title": "기생충", "overview": "x"}]}
+    client = TMDb("k", lang="ru-RU", fetch=_by_language(ru, {"results": []}))
+    named = client.name_titles(client.search("x"), "x", "movie")
+    assert [c.name for c in named] == ["Паразиты"]
+
+
+def test_name_titles_asks_english_only_when_a_title_needs_it() -> None:
+    asked: list[str] = []
+
+    def fetch(path: str, params: dict[str, str]) -> Any:
+        asked.append(params.get("language", ""))
+        return {"results": [{"id": 5, "title": "Tenet", "original_title": "Tenet", "overview": "x"}]}
+
+    client = TMDb("k", lang="ru-RU", fetch=fetch)
+    client.name_titles(client.search("x"), "x", "movie")
+    assert asked == [""]
