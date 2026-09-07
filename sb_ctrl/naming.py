@@ -8,15 +8,18 @@ from sb_ctrl.config import Config
 
 KINDS = ("movie", "cartoon", "series", "cartoon_series")
 
-_STRIP = '?*"<>|'
+# the one character a Linux path component cannot hold
+SEPARATOR = "/"
 
 
 def sanitize(name: str) -> str:
-    """Make ``name`` safe for a filesystem path component (SPEC.md section 7)."""
-    name = name.replace("/", "-").replace(":", " -")
-    for ch in _STRIP:
-        name = name.replace(ch, "")
-    return name.strip()
+    """Make ``name`` safe for a filesystem path component (SPEC.md section 7).
+
+    A title keeps its own punctuation: ``Demon Slayer: Kimetsu no Yaiba`` and
+    ``Who Framed Roger Rabbit?`` are what the library is named by, and this
+    filesystem takes both. Only the separator has to go.
+    """
+    return " ".join(name.replace(SEPARATOR, "-").split()).strip(" .")
 
 
 def root_for_kind(cfg: Config, kind: str) -> str:
