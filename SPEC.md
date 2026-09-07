@@ -188,7 +188,9 @@ second version triggers a collision prompt.
 Show folder = `original_title (Year)`; season = `Season NN` (zero-padded); file =
 `SNNEMM.ext`.
 
-**Sanitization:** `/`→`-`, `:`→` -`, strip `? * " < > |`; keep the source extension.
+**Sanitization:** `/`→`-`, and nothing else. A title keeps the punctuation it
+has, because the library is named by it and this filesystem takes it; the
+source extension is kept as it is.
 
 **Kept vs skipped:** transfer **video + subtitles** only (subtitle renamed to the
 video basename, preserving a `.ru`/`.en`-style language suffix if present). Skip
