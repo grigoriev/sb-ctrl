@@ -4,7 +4,17 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+Releases before 0.8.0 are listed on the
+[GitHub releases page](https://github.com/grigoriev/sb-ctrl/releases).
+
 ## [Unreleased]
+
+### Changed
+
+- Release with the Bump Version & Release workflow. Its `v*` tag builds and pushes
+  the image, then creates the GitHub release.
+- The version bump moves the Unreleased entries of this changelog into a section for
+  the new version. The GitHub release takes its notes from that section.
 
 ## [0.8.0] - 2026-09-24
 
@@ -45,6 +55,3 @@ The project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Reject a transfer whose destination is not inside the library root, for example
   a name that sanitizes to nothing.
 - Run CI once per commit on a Renovate branch: drop `renovate/**` from the push trigger.
-
-Earlier releases are listed on the
-[GitHub releases page](https://github.com/grigoriev/sb-ctrl/releases).

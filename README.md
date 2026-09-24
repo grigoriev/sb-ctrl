@@ -88,6 +88,10 @@ adding magnets.
 ## Container image
 
 Each GitHub release publishes `ghcr.io/grigoriev/sb-ctrl:<version>`.
+To release, run the **Bump Version & Release** workflow with `patch`, `minor`
+or `major`. It moves the Unreleased entries of `CHANGELOG.md` into a section
+for the new version and tags it. The tag builds and pushes the image, then
+creates the GitHub release with the notes of that section.
 [sb-stack](https://github.com/grigoriev/sb-stack) runs it.
 
 ### Verify
