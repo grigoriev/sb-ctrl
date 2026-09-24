@@ -64,6 +64,7 @@ class Config:
     api_host: str = "127.0.0.1"
     api_port: int = 8765
     api_token: str = ""
+    allow_open: bool = False
     auth_user: str = ""
     auth_password_hash: str = ""
     auth_secret: str = ""
@@ -76,6 +77,14 @@ class Config:
             if data[secret]:
                 data[secret] = "***"
         return data
+
+
+def _flag(section: dict[str, Any], key: str, name: str) -> bool:
+    """A TOML boolean. A string such as "false" would read as true, so refuse it."""
+    value = section.get(key, False)
+    if not isinstance(value, bool):
+        raise ValueError(f"{name} must be true or false, not {value!r}")
+    return value
 
 
 def from_dict(data: dict[str, Any]) -> Config:
@@ -121,6 +130,7 @@ def from_dict(data: dict[str, Any]) -> Config:
         api_host=api.get("host", base.api_host),
         api_port=int(api.get("port", base.api_port)),
         api_token=api.get("token", base.api_token),
+        allow_open=_flag(api, "allow_open", "[api] allow_open"),
         auth_user=auth.get("user", base.auth_user),
         auth_password_hash=auth.get("password_hash", base.auth_password_hash),
         auth_secret=auth.get("secret", base.auth_secret),

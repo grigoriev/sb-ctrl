@@ -196,3 +196,57 @@ def test_hash_password_prompts_without_stdin(
     monkeypatch.setattr("getpass.getpass", lambda *_: "typed at the prompt")
     assert cli.main(["hash-password"]) == 0
     assert json.loads(capsys.readouterr().out)["password_hash"].startswith("scrypt$")
+
+
+def _serve_cfg(tmp_path: Path, api: str) -> Path:
+    path = tmp_path / "serve.toml"
+    path.write_text(f"[api]\n{api}\n")
+    return path
+
+
+def _fake_uvicorn(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
+    import uvicorn
+
+    runs: list[dict[str, object]] = []
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kw: runs.append({"app": app, **kw}))
+    return runs
+
+
+def test_serve_refuses_without_auth(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("SB_CTRL_CONFIG", str(_serve_cfg(tmp_path, 'host = "0.0.0.0"')))
+    runs = _fake_uvicorn(monkeypatch)
+    assert cli.main(["serve"]) == 1
+    err = capsys.readouterr().err
+    assert len(err.strip().splitlines()) == 1
+    assert "refusing to start" in json.loads(err)["error"]
+    assert runs == []
+
+
+def test_serve_refuses_a_non_boolean_allow_open(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("SB_CTRL_CONFIG", str(_serve_cfg(tmp_path, 'allow_open = "true"')))
+    runs = _fake_uvicorn(monkeypatch)
+    assert cli.main(["serve"]) == 1
+    assert "must be true or false" in json.loads(capsys.readouterr().err)["error"]
+    assert runs == []
+
+
+def test_serve_starts_with_a_token(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SB_CTRL_CONFIG", str(_serve_cfg(tmp_path, 'token = "secret"\nport = 9999')))
+    runs = _fake_uvicorn(monkeypatch)
+    assert cli.main(["serve"]) == 0
+    assert runs[0]["port"] == 9999
+
+
+def test_serve_starts_with_allow_open_and_warns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setenv("SB_CTRL_CONFIG", str(_serve_cfg(tmp_path, "allow_open = true")))
+    runs = _fake_uvicorn(monkeypatch)
+    with caplog.at_level("WARNING", logger="sb_ctrl.api"):
+        assert cli.main(["serve"]) == 0
+    assert len(runs) == 1
+    assert caplog.text.count("authentication is off") == 1

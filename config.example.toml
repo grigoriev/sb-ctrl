@@ -50,8 +50,8 @@ parallel   = 1
 
 [auth]
 # Browser login. Generate both values with:  sb-ctrl hash-password
-# Leave the section out and the browser gets no way in of its own; then the API
-# is open to whatever can reach it, or to holders of the [api] token.
+# Leave the section out and the browser gets no way in of its own; then only
+# holders of the [api] token get in.
 user          = "CHANGE_ME"
 password_hash = "CHANGE_ME"        # scrypt$salt$hash
 secret        = "CHANGE_ME"        # signs the session cookie
@@ -61,3 +61,6 @@ ttl_hours     = 720                # how long a session lasts
 host  = "127.0.0.1"               # behind a systemd reverse proxy; use "0.0.0.0" in Docker
 port  = 8765
 token = "CHANGE_ME"               # bearer token clients must send
+# Without a token and without [auth], sb-ctrl refuses to start. Set this to
+# true to run with no authentication at all, open to anyone who can reach it.
+# allow_open = false

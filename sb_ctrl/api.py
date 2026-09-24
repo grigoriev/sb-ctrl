@@ -11,6 +11,8 @@ import dataclasses
 import hmac
 import logging
 import xmlrpc.client
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -93,19 +95,35 @@ def _same(given: str, expected: str) -> bool:
     return hmac.compare_digest(given.encode(), expected.encode())
 
 
-def warn_if_open(cfg: Config) -> bool:
-    """Log a warning when neither a token nor a login protects the API.
+OPEN_REFUSED = (
+    "sb-ctrl: no [api] token and no [auth] configured, refusing to start. "
+    "Set [api] allow_open = true to run without authentication."
+)
 
-    The API stays open in that case so a fresh install can be set up. The
-    warning makes sure an open API is a choice, not an accident.
+
+class AuthNotConfiguredError(RuntimeError):
+    """The API has no authentication and the config does not allow that."""
+
+
+def auth_configured(cfg: Config) -> bool:
+    """True when a bearer token or a complete login protects the API."""
+    return bool(cfg.api_token) or login_configured(cfg)
+
+
+def check_auth(cfg: Config) -> None:
+    """Refuse to serve without authentication, unless ``[api] allow_open`` says so.
+
+    An open API must be a choice, not an accident. When it is the choice, a
+    warning at startup keeps it visible.
     """
-    if cfg.api_token or login_configured(cfg):
-        return False
+    if auth_configured(cfg):
+        return
+    if not cfg.allow_open:
+        raise AuthNotConfiguredError(OPEN_REFUSED)
     _log.warning(
-        "sb-ctrl: authentication is off, every route is open to anyone who can reach the port. "
-        "Set [api] token, or [auth] user, password_hash and secret."
+        "sb-ctrl: authentication is off ([api] allow_open = true), every route is open "
+        "to anyone who can reach the port. Set [api] token, or [auth] user, password_hash and secret."
     )
-    return True
 
 
 def require_token(
@@ -117,13 +135,14 @@ def require_token(
 
     Two ways in: the bearer token, which scripts and the Alfred workflow use,
     and the session cookie a browser gets from /login. When neither is
-    configured (fresh install) the API is open, so setup works before then.
+    configured, only ``[api] allow_open = true`` opens the API; otherwise every
+    request is refused, however the server was started.
     """
     if cfg.api_token and authorization is not None and _same(authorization, f"Bearer {cfg.api_token}"):
         return
     if login_configured(cfg) and sb_session and auth.session_user(cfg.auth_secret, sb_session):
         return
-    if not cfg.api_token and not login_configured(cfg):
+    if cfg.allow_open and not auth_configured(cfg):
         return
     raise HTTPException(status_code=401, detail="unauthorized")
 
@@ -317,9 +336,21 @@ def _add_job_routes(app: FastAPI) -> None:
         return {"deleted": job_id}
 
 
-def create_app() -> FastAPI:
-    """Assemble the app from the route groups; each group stays small enough to read."""
-    app = FastAPI(title="sb-ctrl", version=__version__)
+@asynccontextmanager
+async def _check_auth_on_startup(app: FastAPI) -> AsyncIterator[None]:
+    """Apply ``check_auth`` when a server such as uvicorn starts the app."""
+    check_auth(app.dependency_overrides.get(get_config, get_config)())
+    yield
+
+
+def create_app(check_on_startup: bool = True) -> FastAPI:
+    """Assemble the app from the route groups; each group stays small enough to read.
+
+    ``check_on_startup=False`` is for a caller that ran ``check_auth`` itself.
+    Requests are checked either way.
+    """
+    lifespan = _check_auth_on_startup if check_on_startup else None
+    app = FastAPI(title="sb-ctrl", version=__version__, lifespan=lifespan)
     _add_session_routes(app)
     _add_library_routes(app)
     _add_job_routes(app)
