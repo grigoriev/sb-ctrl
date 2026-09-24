@@ -38,6 +38,11 @@ sb-ctrl hash-password        # prompts, prints a password_hash and a secret
 Put both in `[auth]` together with the user name. Without that section a browser
 has no way in, and only the bearer token opens the API.
 
+With neither `[api] token` nor a complete `[auth]` section, the API is open to
+anyone who can reach the port. This lets a fresh install be set up. `sb-ctrl
+serve` then logs a warning at startup. Set at least one of them before the port
+is reachable from another host.
+
 ```
 GET  /me                  whether a login is needed, and who is logged in
 POST /login, /logout      start and end a browser session
