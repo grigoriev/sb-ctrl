@@ -12,6 +12,7 @@ The API has two ways in: a bearer token from `[api] token`, and a browser
 session from `[auth]`. The server compares the token and the user name in
 constant time.
 
-When neither is configured, the API is open, so a fresh install can be set up.
-`sb-ctrl serve` logs a warning at startup in that case. Configure a token or a
-login before you expose the port.
+When neither is configured, the server fails closed: it refuses to start, and
+it rejects every request with 401. Only `[api] allow_open = true` opens the API
+without authentication. The server then logs a warning at startup. Use it only
+on a host that nothing else can reach.

@@ -10,7 +10,7 @@ The project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Compare the bearer token in constant time.
 - Compare the login user name as bytes, so a non-ASCII name gets 401, not 500.
-- Log a warning at startup when the API has no authentication.
+- Log a warning at startup when the API runs without authentication.
 - Audit the workflows with actionlint and zizmor in a new `lint` job.
 - Lint the Dockerfile with Hadolint and `trivy config` in the `lint` job.
 - Add the OpenSSF Scorecard workflow and its README badge.
@@ -29,6 +29,11 @@ The project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Behavior change:** fail closed without authentication. With no `[api] token`
+  and no complete `[auth]` section, `sb-ctrl serve` refuses to start, the app
+  refuses to start under uvicorn, and every request gets 401. An install that
+  runs without authentication on purpose must set `[api] allow_open = true`.
+  It then starts with a warning. A non-boolean `allow_open` is a config error.
 - Use neutral example hosts in the config defaults, the example config and the docs.
 - Renovate takes its common rules from the shared preset `github>grigoriev/renovate-config`.
 

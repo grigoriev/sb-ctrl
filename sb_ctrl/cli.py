@@ -115,14 +115,15 @@ def _cmd_hash_password(stream: IO[str], from_stdin: bool) -> dict[str, Any]:
     return {"password_hash": auth.hash_password(password), "secret": secrets.token_urlsafe(32)}
 
 
-def _cmd_serve() -> dict[str, Any]:  # pragma: no cover - runs a blocking server
+def _cmd_serve() -> dict[str, Any]:
+    """Run the API, after the auth check: a refusal is one error line, not a traceback."""
     import uvicorn
 
-    from sb_ctrl.api import app, warn_if_open
+    from sb_ctrl.api import check_auth, create_app
 
     cfg = load_config()
-    warn_if_open(cfg)
-    uvicorn.run(app, host=cfg.api_host, port=cfg.api_port)
+    check_auth(cfg)
+    uvicorn.run(create_app(check_on_startup=False), host=cfg.api_host, port=cfg.api_port)
     return {"ok": True}
 
 

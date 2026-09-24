@@ -105,3 +105,18 @@ def test_files_section_normalizes() -> None:
 def test_sftp_user_is_read() -> None:
     cfg = from_dict({"sftp": {"host": "h", "user": "u"}})
     assert (cfg.sftp_host, cfg.sftp_user) == ("h", "u")
+
+
+def test_allow_open_defaults_to_false() -> None:
+    assert Config().allow_open is False
+    assert from_dict({}).allow_open is False
+
+
+def test_allow_open_is_read() -> None:
+    assert from_dict({"api": {"allow_open": True}}).allow_open is True
+
+
+@pytest.mark.parametrize("value", ["true", "false", 1, 0])
+def test_allow_open_must_be_a_boolean(value: object) -> None:
+    with pytest.raises(ValueError, match=r"\[api\] allow_open must be true or false"):
+        from_dict({"api": {"allow_open": value}})

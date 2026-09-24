@@ -45,6 +45,11 @@ class _FakeRT:
         return [ONE]
 
 
+def _open(**fields: object) -> Config:
+    """A config without auth that opts in to an open API, as tests of routes need."""
+    return Config(allow_open=True, **fields)  # type: ignore[arg-type]
+
+
 def _client(cfg: Config) -> TestClient:
     app = api.create_app()
     app.dependency_overrides[api.get_config] = lambda: cfg
@@ -63,8 +68,12 @@ def test_token_is_required_when_configured() -> None:
     assert client.get("/config", headers={"Authorization": "Bearer secret"}).status_code == 200
 
 
-def test_open_when_no_token() -> None:
-    assert _client(Config()).get("/config").status_code == 200
+def test_open_with_allow_open() -> None:
+    assert _client(_open()).get("/config").status_code == 200
+
+
+def test_allow_open_does_not_skip_a_configured_token() -> None:
+    assert _client(_open(api_token="secret")).get("/config").status_code == 401
 
 
 @pytest.mark.parametrize(
@@ -97,28 +106,67 @@ def test_the_token_is_compared_in_constant_time(monkeypatch: pytest.MonkeyPatch)
     assert calls == [(b"Bearer secret", b"Bearer secret")]
 
 
-def test_an_open_api_logs_a_warning(caplog: pytest.LogCaptureFixture) -> None:
+def test_an_open_api_is_refused_without_allow_open() -> None:
+    client = _client(Config())
+    assert client.get("/config").status_code == 401
+    assert client.get("/health").status_code == 200
+
+
+def _start(cfg: Config) -> None:
+    """Run the app's startup, as uvicorn does, and stop it again."""
+    app = api.create_app()
+    app.dependency_overrides[api.get_config] = lambda: cfg
+    with TestClient(app):
+        pass
+
+
+def test_startup_refuses_without_auth() -> None:
+    with pytest.raises(api.AuthNotConfiguredError, match="refusing to start"):
+        _start(Config())
+
+
+def test_startup_refuses_an_incomplete_login() -> None:
+    with pytest.raises(api.AuthNotConfiguredError):
+        _start(Config(auth_user="sergey", auth_password_hash="scrypt$a$b"))
+
+
+def test_startup_with_a_token(caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level("WARNING", logger="sb_ctrl.api"):
-        assert api.warn_if_open(Config()) is True
+        _start(Config(api_token="secret"))
+    assert caplog.text == ""
+
+
+def test_startup_with_a_login(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level("WARNING", logger="sb_ctrl.api"):
+        _start(_login_cfg())
+    assert caplog.text == ""
+
+
+def test_startup_with_allow_open_warns(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level("WARNING", logger="sb_ctrl.api"):
+        _start(_open())
     assert "authentication is off" in caplog.text
 
 
-def test_a_protected_api_logs_no_warning(caplog: pytest.LogCaptureFixture) -> None:
-    with caplog.at_level("WARNING", logger="sb_ctrl.api"):
-        assert api.warn_if_open(Config(api_token="secret")) is False
-        assert api.warn_if_open(_login_cfg()) is False
-    assert caplog.text == ""
+def test_the_module_app_checks_on_startup() -> None:
+    assert api.app.router.lifespan_context is not None
+    api.app.dependency_overrides[api.get_config] = Config
+    try:
+        with pytest.raises(api.AuthNotConfiguredError), TestClient(api.app):
+            pass
+    finally:
+        api.app.dependency_overrides.clear()
 
 
 def test_torrents(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(api, "RTorrent", _FakeRT)
-    resp = _client(Config()).get("/torrents")
+    resp = _client(_open()).get("/torrents")
     assert resp.json()["items"][0]["name"] == "Movie"
 
 
 def test_search(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(tmdb, "TMDb", _FakeTMDb)
-    resp = _client(Config()).get("/search", params={"name": "Some.Movie.2020.1080p"})
+    resp = _client(_open()).get("/search", params={"name": "Some.Movie.2020.1080p"})
     body = resp.json()
     assert body["guess"]["media"] == "movie"
     assert body["candidates"][0]["kind"] == "movie"
@@ -127,7 +175,7 @@ def test_search(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_plan(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(api, "RTorrent", _FakeRT)
-    cfg = Config(root_movies=str(tmp_path / "movies"), staging_root=str(tmp_path / "staging"))
+    cfg = _open(root_movies=str(tmp_path / "movies"), staging_root=str(tmp_path / "staging"))
     resp = _client(cfg).post("/plan", json={"hash": "H1", "kind": "movie"})
     assert resp.status_code == 200
     assert resp.json()["job_spec"]["dest_path"].endswith("/movies/Movie/Movie.mkv")
@@ -135,7 +183,7 @@ def test_plan(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_plan_unknown_hash_404(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(api, "RTorrent", _FakeRT)
-    resp = _client(Config()).post("/plan", json={"hash": "NOPE", "kind": "movie"})
+    resp = _client(_open()).post("/plan", json={"hash": "NOPE", "kind": "movie"})
     assert resp.status_code == 404
 
 
@@ -148,7 +196,7 @@ def test_create_job_and_launch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
         return "systemd"
 
     monkeypatch.setattr(launcher, "launch", fake_launch)
-    cfg = Config(root_movies=str(tmp_path / "movies"), staging_root=str(tmp_path / "staging"))
+    cfg = _open(root_movies=str(tmp_path / "movies"), staging_root=str(tmp_path / "staging"))
     resp = _client(cfg).post("/jobs", json={"hash": "H1", "kind": "movie", "collision": "overwrite"})
     assert resp.status_code == 200
     assert launched == [resp.json()["job_id"]]
@@ -159,13 +207,13 @@ def test_create_job_skips_on_collision(tmp_path: Path, monkeypatch: pytest.Monke
     dest = tmp_path / "movies" / "Movie" / "Movie.mkv"
     dest.parent.mkdir(parents=True)
     dest.write_text("x")
-    cfg = Config(root_movies=str(tmp_path / "movies"), staging_root=str(tmp_path / "staging"))
+    cfg = _open(root_movies=str(tmp_path / "movies"), staging_root=str(tmp_path / "staging"))
     resp = _client(cfg).post("/jobs", json={"hash": "H1", "kind": "movie", "collision": "skip"})
     assert resp.json()["skipped"] is True
 
 
 def test_jobs_list_and_get(tmp_path: Path) -> None:
-    cfg = Config(staging_root=str(tmp_path / "staging"))
+    cfg = _open(staging_root=str(tmp_path / "staging"))
     create_job(cfg.staging_root, {"name": "X"}, job_id="J1")
     client = _client(cfg)
     assert client.get("/jobs").json()["jobs"][0]["id"] == "J1"
@@ -175,7 +223,7 @@ def test_jobs_list_and_get(tmp_path: Path) -> None:
 
 def test_retry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(launcher, "launch", lambda job_id: "systemd")
-    cfg = Config(staging_root=str(tmp_path / "staging"))
+    cfg = _open(staging_root=str(tmp_path / "staging"))
     create_job(cfg.staging_root, {"name": "X"}, job_id="J2")
     client = _client(cfg)
     assert client.post("/jobs/J2/retry").json()["job_id"] == "J2"
@@ -244,7 +292,7 @@ def test_login_rejects_a_non_ascii_user() -> None:
 
 
 def test_login_without_configuration_is_refused() -> None:
-    client = _client(Config())
+    client = _client(_open())
     resp = client.post("/login", json={"user": "sergey", "password": PASSWORD})
     assert resp.status_code == 400
 
@@ -278,7 +326,7 @@ def test_me_reports_whether_a_login_is_needed() -> None:
 
 
 def test_me_on_an_open_install() -> None:
-    assert _client(Config()).get("/me").json() == {"login_required": False, "user": None}
+    assert _client(_open()).get("/me").json() == {"login_required": False, "user": None}
 
 
 def test_config_redacts_the_login_secrets() -> None:
@@ -293,7 +341,7 @@ def test_config_redacts_the_login_secrets() -> None:
 
 
 def test_delete_removes_the_job_and_its_staging(tmp_path: Path) -> None:
-    cfg = Config(staging_root=str(tmp_path))
+    cfg = _open(staging_root=str(tmp_path))
     job = create_job(str(tmp_path), {"name": "x"})
     write_state(job, state="failed", error="boom")
     staging = tmp_path / ".staging" / job.name
@@ -309,7 +357,7 @@ def test_delete_removes_the_job_and_its_staging(tmp_path: Path) -> None:
 
 
 def test_delete_refuses_a_running_job(tmp_path: Path) -> None:
-    cfg = Config(staging_root=str(tmp_path))
+    cfg = _open(staging_root=str(tmp_path))
     job = create_job(str(tmp_path), {"name": "x"})
     write_state(job, state="active", pct=42)
 
@@ -320,20 +368,20 @@ def test_delete_refuses_a_running_job(tmp_path: Path) -> None:
 
 
 def test_delete_reports_an_unknown_job(tmp_path: Path) -> None:
-    cfg = Config(staging_root=str(tmp_path))
+    cfg = _open(staging_root=str(tmp_path))
     jobs_dir(str(tmp_path)).mkdir(parents=True)
     assert _client(cfg).delete("/jobs/nope").status_code == 404
 
 
 def test_delete_a_job_that_never_wrote_a_state(tmp_path: Path) -> None:
-    cfg = Config(staging_root=str(tmp_path))
+    cfg = _open(staging_root=str(tmp_path))
     job = create_job(str(tmp_path), {"name": "x"})
     (job / "state.json").unlink(missing_ok=True)
     assert _client(cfg).delete(f"/jobs/{job.name}").status_code == 200
 
 
 def test_job_log_is_served(tmp_path: Path) -> None:
-    cfg = Config(staging_root=str(tmp_path))
+    cfg = _open(staging_root=str(tmp_path))
     job = create_job(cfg.staging_root, {"name": "X"}, job_id="J30")
     (job / "job.log").write_text("lftp said this\n")
     resp = _client(cfg).get("/jobs/J30/log")
@@ -342,19 +390,19 @@ def test_job_log_is_served(tmp_path: Path) -> None:
 
 
 def test_job_log_of_an_unknown_job_is_404(tmp_path: Path) -> None:
-    resp = _client(Config(staging_root=str(tmp_path))).get("/jobs/nope/log")
+    resp = _client(_open(staging_root=str(tmp_path))).get("/jobs/nope/log")
     assert resp.status_code == 404
 
 
 def test_a_job_with_no_state_is_404(tmp_path: Path) -> None:
-    cfg = Config(staging_root=str(tmp_path))
+    cfg = _open(staging_root=str(tmp_path))
     job = create_job(cfg.staging_root, {"name": "X"}, job_id="J31")
     (job / "state.json").unlink()
     assert _client(cfg).get("/jobs/J31").status_code == 404
 
 
 def test_listing_jobs_marks_a_dead_worker(tmp_path: Path) -> None:
-    cfg = Config(staging_root=str(tmp_path))
+    cfg = _open(staging_root=str(tmp_path))
     job = create_job(cfg.staging_root, {"name": "X"}, job_id="J32")
     write_state(job, state="active", pct=10, pid=999_999)
     body = _client(cfg).get("/jobs").json()
@@ -363,7 +411,7 @@ def test_listing_jobs_marks_a_dead_worker(tmp_path: Path) -> None:
 
 def test_torrents_report_a_delivered_title(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(api, "RTorrent", _FakeRT)
-    cfg = Config(staging_root=str(tmp_path))
+    cfg = _open(staging_root=str(tmp_path))
     dest = tmp_path / "movies" / "Movie"
     dest.mkdir(parents=True)
     job = create_job(cfg.staging_root, {"name": "Movie", "source": {"hash": "H1"}}, job_id="J40")
@@ -375,7 +423,7 @@ def test_torrents_report_a_delivered_title(tmp_path: Path, monkeypatch: pytest.M
 
 def test_torrents_report_a_transfer_in_flight(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(api, "RTorrent", _FakeRT)
-    cfg = Config(staging_root=str(tmp_path))
+    cfg = _open(staging_root=str(tmp_path))
     job = create_job(cfg.staging_root, {"name": "Movie", "source": {"hash": "H1"}}, job_id="J41")
     write_state(job, state="active", pct=35, pid=os.getpid())
     item = _client(cfg).get("/torrents").json()["items"][0]
@@ -385,7 +433,7 @@ def test_torrents_report_a_transfer_in_flight(tmp_path: Path, monkeypatch: pytes
 
 def test_torrents_match_an_older_job_by_release(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(api, "RTorrent", _FakeRT)
-    cfg = Config(staging_root=str(tmp_path))
+    cfg = _open(staging_root=str(tmp_path))
     job = create_job(cfg.staging_root, {"name": "Movie", "source": {"base_rel": "files/Movie.mkv"}}, job_id="J42")
     write_state(job, state="done", pct=100, dest=str(tmp_path / "gone"))
     item = _client(cfg).get("/torrents").json()["items"][0]
@@ -396,7 +444,7 @@ def test_torrents_match_an_older_job_by_release(tmp_path: Path, monkeypatch: pyt
 
 def test_torrents_stay_bare_without_a_job(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(api, "RTorrent", _FakeRT)
-    item = _client(Config(staging_root=str(tmp_path))).get("/torrents").json()["items"][0]
+    item = _client(_open(staging_root=str(tmp_path))).get("/torrents").json()["items"][0]
     assert "job" not in item
     assert "delivered" not in item
 
@@ -423,7 +471,7 @@ def _with_library_index(monkeypatch: pytest.MonkeyPatch, sizes: dict[int, str] |
 
 def test_torrents_read_delivery_from_the_library(monkeypatch: pytest.MonkeyPatch) -> None:
     _with_library_index(monkeypatch, {100: "/media/movies/Movie/Movie.mkv"})
-    item = _client(Config()).get("/torrents").json()["items"][0]
+    item = _client(_open()).get("/torrents").json()["items"][0]
     # no job at all, and the file is in Plex: that is what counts
     assert item["delivered"] is True
     assert item["library"] == {"have": 1, "total": 1}
@@ -436,14 +484,14 @@ def test_torrents_report_a_pack_the_library_holds_in_part(monkeypatch: pytest.Mo
 
     monkeypatch.setattr(api, "RTorrent", _Pack)
     monkeypatch.setattr(api, "library_index", lambda cfg: _StubIndex({100: "/media/series/X/S01E01.mkv"}))
-    item = _client(Config()).get("/torrents").json()["items"][0]
+    item = _client(_open()).get("/torrents").json()["items"][0]
     assert item["library"] == {"have": 1, "total": 2}
     assert item["delivered"] is False
 
 
 def test_torrents_fall_back_to_the_job_when_plex_is_silent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _with_library_index(monkeypatch, None)
-    cfg = Config(staging_root=str(tmp_path))
+    cfg = _open(staging_root=str(tmp_path))
     dest = tmp_path / "movies" / "Movie"
     dest.mkdir(parents=True)
     job = create_job(cfg.staging_root, {"name": "Movie", "source": {"hash": "H1"}}, job_id="J50")
@@ -460,7 +508,7 @@ def test_torrents_survive_a_seedbox_that_cannot_list_files(monkeypatch: pytest.M
 
     monkeypatch.setattr(api, "RTorrent", _Broken)
     monkeypatch.setattr(api, "library_index", lambda cfg: _StubIndex({100: "x"}))
-    item = _client(Config()).get("/torrents").json()["items"][0]
+    item = _client(_open()).get("/torrents").json()["items"][0]
     assert item["name"] == "Movie"
     assert "library" not in item
 

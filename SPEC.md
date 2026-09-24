@@ -64,6 +64,7 @@ point.
 | `staging_root` | staging dir, **same filesystem as the libraries** | `[TBD]` |
 | `api.host` / `api.port` | uvicorn bind | `127.0.0.1` / `8765` |
 | `api.token` | bearer token for the REST API | `[TBD]` |
+| `api.allow_open` | serve without any authentication (boolean) | `false` |
 
 `GET /config` returns this (secrets redacted); `sb-ctrl config get` prints it.
 
@@ -74,8 +75,9 @@ point.
 Clients (the Alfred workflow, a future React UI) talk to a **FastAPI** service.
 Pydantic models formalize the contract and produce an OpenAPI schema at `/docs`.
 A bearer token (`Authorization: Bearer <token>`) guards every route except
-`/health`; when no token is configured the API is open, so first-time setup
-works. TLS is terminated by a reverse proxy (see Deployment).
+`/health`, `/me` and `/login`; a browser session from `[auth]` works too. With
+neither configured the server refuses to start, unless `api.allow_open = true`
+opens the API on purpose. TLS is terminated by a reverse proxy (see Deployment).
 
 | Method + path | Body / params | Result |
 |---|---|---|
