@@ -6,6 +6,8 @@
 FROM python:3.14-slim@sha256:ce40764625a4ff50df3548277632e7f96c4e77fe75fa848aae9885476e7df5a4
 
 # lftp performs the mirror/get transfers; openssh-client backs lftp's sftp.
+# The versions follow the pinned base image, so they are not pinned here.
+# hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get install -y --no-install-recommends lftp openssh-client \
     && rm -rf /var/lib/apt/lists/*

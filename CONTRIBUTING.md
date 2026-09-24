@@ -7,9 +7,10 @@ Thanks for your interest in improving this project.
 This project uses [uv](https://docs.astral.sh/uv/). Run the checks with:
 
 ```sh
-uv run ruff check .
-uv run mypy .
-uv run pytest
+uv sync --all-extras
+uv run ruff check . && uv run ruff format --check .
+uv run mypy sb_ctrl tests
+uv run pytest --cov --cov-report=term-missing
 ```
 
 ## Commit messages
@@ -29,3 +30,5 @@ subject under 50 characters. Types: `feat`, `fix`, `docs`, `style`, `refactor`,
 ## Before opening a pull request
 
 - Run the checks above and make sure CI is green.
+- Sign your commits. The `main` branch accepts verified signatures only.
+- Pull requests are merged with squash merge.
