@@ -2,6 +2,11 @@ name: Publish image
 
 # bump-version.yml pushes the v* tag. The image and the GitHub release follow
 # from it; no release is created by hand.
+#
+# The job builds the image, runs the smoke test on it, and pushes exactly that
+# image: the push takes its layers from the local builder cache of the tested
+# build, by digest. The tags then point at an index that holds that digest.
+# Both attestations name the index, so a check on a tag finds them.
 on:
   push:
     tags:
@@ -10,9 +15,17 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/grigoriev/sb-ctrl
+
 jobs:
   docker:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
@@ -28,6 +41,17 @@ jobs:
       - name: Read the release notes from CHANGELOG.md
         run: .github/scripts/changelog-section.sh "${GITHUB_REF_NAME#v}" "$GITHUB_REPOSITORY" > "$RUNNER_TEMP/release-notes.md"
 
+      # Releases are immutable: the release gets all its files in one create
+      # call. A tag that has a release already stops here, before the push.
+      - name: Refuse an existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "::error::Release $GITHUB_REF_NAME exists. Releases are immutable: release a new version."
+            exit 1
+          fi
+
       - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -37,25 +61,57 @@ jobs:
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ghcr.io/grigoriev/sb-ctrl
+          images: ${{ env.IMAGE }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest
-      - id: push
+
+      - name: Build the image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          load: true
+          tags: sb-ctrl:test
           labels: ${{ steps.meta.outputs.labels }}
 
-      # The SBOM lists the packages of the pushed image. It is attached to
-      # the image digest as a signed attestation.
+      - name: Smoke test the image
+        run: tests/smoke-image.sh sb-ctrl:test
+
+      # Same context and labels as the tested build, so every layer comes from
+      # the local builder cache. No cache-from here: a remote cache could hand
+      # in a layer that was not tested.
+      - name: Push the tested image by digest
+        id: push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Tag the pushed image
+        id: tag
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          args=()
+          while IFS= read -r tag; do
+            [ -n "$tag" ] && args+=(-t "$tag")
+          done <<< "$TAGS"
+          docker buildx imagetools create "${args[@]}" "${IMAGE}@${DIGEST}"
+          VERSION_TAG="${IMAGE}:${GITHUB_REF_NAME#v}"
+          docker buildx imagetools inspect "$VERSION_TAG"
+          digest=$(docker buildx imagetools inspect "$VERSION_TAG" --format '{{json .Manifest}}' | jq -r .digest)
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      # The SBOM lists the packages of the tested image. It is attached to the
+      # tagged index as a signed attestation.
       - name: Generate the SBOM
         uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
-          image: ghcr.io/grigoriev/sb-ctrl@${{ steps.push.outputs.digest }}
+          image: sb-ctrl:test
           format: spdx-json
           output-file: sbom.spdx.json
           upload-artifact: false
@@ -64,8 +120,8 @@ jobs:
       - name: Attest the SBOM
         uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
         with:
-          subject-name: ghcr.io/grigoriev/sb-ctrl
-          subject-digest: ${{ steps.push.outputs.digest }}
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.tag.outputs.digest }}
           sbom-path: sbom.spdx.json
           push-to-registry: true
 
@@ -75,8 +131,8 @@ jobs:
         id: provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-name: ghcr.io/grigoriev/sb-ctrl
-          subject-digest: ${{ steps.push.outputs.digest }}
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.tag.outputs.digest }}
           push-to-registry: true
 
       # Scorecard Signed-Releases reads release assets only. The next job
@@ -101,6 +157,7 @@ jobs:
   release-assets:
     needs: docker
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
@@ -109,6 +166,7 @@ jobs:
           name: release-assets
           path: assets
 
+      # Releases are immutable: the release gets all files in this one call.
       - name: Create the release with the provenance and the SBOM
         env:
           GH_TOKEN: ${{ github.token }}
@@ -117,11 +175,5 @@ jobs:
         run: |
           mv assets/provenance.intoto.jsonl "assets/sb-ctrl-${TAG}.intoto.jsonl"
           mv assets/sbom.spdx.json "assets/sb-ctrl-${TAG}.spdx.json"
-          # A rerun replaces the files of the existing release.
-          if gh release view "$TAG" --repo "$REPO" > /dev/null 2>&1; then
-            gh release upload "$TAG" "assets/sb-ctrl-${TAG}.intoto.jsonl" \
-              "assets/sb-ctrl-${TAG}.spdx.json" --clobber --repo "$REPO"
-          else
-            gh release create "$TAG" "assets/sb-ctrl-${TAG}.intoto.jsonl" \
-              "assets/sb-ctrl-${TAG}.spdx.json" --notes-file assets/release-notes.md --repo "$REPO"
-          fi
+          gh release create "$TAG" "assets/sb-ctrl-${TAG}.intoto.jsonl" \
+            "assets/sb-ctrl-${TAG}.spdx.json" --notes-file assets/release-notes.md --repo "$REPO"

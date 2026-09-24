@@ -15,6 +15,13 @@ Releases before 0.8.0 are listed on the
   the image, then creates the GitHub release.
 - The version bump moves the Unreleased entries of this changelog into a section for
   the new version. The GitHub release takes its notes from that section.
+- CI builds the image on every pull request, scans it with Trivy (a fixable CRITICAL
+  finding fails) and runs the new smoke test `tests/smoke-image.sh` on it.
+- The publish workflow runs the same smoke test and pushes exactly the tested image,
+  by digest from the local build cache, before it sets the tags.
+- Align the repository with the shared baseline: CI jobs have time limits, the version
+  bump pushes without stored credentials, a release run fails when the release exists
+  already, and SonarCloud analyzes the tests as tests for Python 3.14.
 
 ## [0.8.0] - 2026-09-24
 
