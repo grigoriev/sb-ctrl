@@ -63,8 +63,50 @@ jobs:
       # Signs which workflow built the image, from which commit. Users check
       # it with: gh attestation verify oci://<image> --owner grigoriev
       - name: Attest the build provenance
+        id: provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ghcr.io/grigoriev/sb-ctrl
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
+
+      # Scorecard Signed-Releases reads release assets only. The next job
+      # attaches the signed provenance and the SBOM to the release.
+      - name: Collect the release assets
+        env:
+          BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+        run: |
+          mkdir -p assets
+          cp "$BUNDLE" assets/provenance.intoto.jsonl
+          cp sbom.spdx.json assets/sbom.spdx.json
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-assets
+          path: assets/
+          if-no-files-found: error
+          retention-days: 1
+
+  # A separate job, so only the upload holds contents: write.
+  release-assets:
+    if: github.event_name == 'release'
+    needs: docker
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-assets
+          path: assets
+
+      - name: Attach the provenance and the SBOM to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          mv assets/provenance.intoto.jsonl "assets/sb-ctrl-${TAG}.intoto.jsonl"
+          mv assets/sbom.spdx.json "assets/sb-ctrl-${TAG}.spdx.json"
+          gh release upload "$TAG" "assets/sb-ctrl-${TAG}.intoto.jsonl" \
+            "assets/sb-ctrl-${TAG}.spdx.json" --clobber --repo "$REPO"
