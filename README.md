@@ -94,6 +94,10 @@ gh attestation verify oci://ghcr.io/grigoriev/sb-ctrl:<tag> --owner grigoriev
 
 Add `--predicate-type https://spdx.dev/Document/v2.3` to check the SBOM.
 
+GitHub releases after 0.7.1 carry both as assets: `sb-ctrl-<tag>.intoto.jsonl`
+(the provenance bundle) and `sb-ctrl-<tag>.spdx.json` (the SBOM). To check against
+the downloaded bundle, add `--bundle sb-ctrl-<tag>.intoto.jsonl`.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).

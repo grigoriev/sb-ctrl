@@ -18,6 +18,7 @@ The project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Let Renovate refresh `uv.lock` and raise OSV vulnerability alerts.
 - Attest the published image: signed build provenance and an SPDX SBOM.
 - Build the image from `uv.lock` with hashes, through a digest-pinned uv image.
+- Attach the provenance bundle and the SBOM to the GitHub release as assets.
 
 ### Added
 
