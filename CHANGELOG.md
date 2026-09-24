@@ -27,6 +27,7 @@ The project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - Use neutral example hosts in the config defaults, the example config and the docs.
+- Renovate takes its common rules from the shared preset `github>grigoriev/renovate-config`.
 
 ### Fixed
 
