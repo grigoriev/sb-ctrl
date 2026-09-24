@@ -1,0 +1,3 @@
+# DS-0002: the image runs as root. On purpose: the worker chowns delivered
+# media to the Plex user, which needs CAP_CHOWN. See the Dockerfile header.
+DS-0002

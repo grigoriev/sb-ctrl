@@ -1,8 +1,15 @@
 # sb-ctrl
 
-![CI](https://github.com/grigoriev/sb-ctrl/actions/workflows/ci.yml/badge.svg)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=grigoriev_sb-ctrl&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=grigoriev_sb-ctrl)
+[![CI](https://github.com/grigoriev/sb-ctrl/actions/workflows/ci.yml/badge.svg)](https://github.com/grigoriev/sb-ctrl/actions/workflows/ci.yml)
+[![Publish image](https://github.com/grigoriev/sb-ctrl/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/grigoriev/sb-ctrl/actions/workflows/docker-publish.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/grigoriev/sb-ctrl/badge)](https://scorecard.dev/viewer/?uri=github.com/grigoriev/sb-ctrl)
+[![Release](https://img.shields.io/github/v/release/grigoriev/sb-ctrl)](https://github.com/grigoriev/sb-ctrl/releases)
+[![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
+[![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=grigoriev_sb-ctrl&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=grigoriev_sb-ctrl)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=grigoriev_sb-ctrl&metric=coverage)](https://sonarcloud.io/summary/new_code?id=grigoriev_sb-ctrl)
 
 Backend service and agent for the seedbox to Plex pipeline. Runs on the Plex
@@ -70,3 +77,34 @@ layout, and the deploy guide (systemd + Caddy). Clients: the
 and [sb-ctrl-ui](https://github.com/grigoriev/sb-ctrl-ui). Still to fill in: the
 `[TBD]` config values (SPEC.md section 11). Later: file-subset selection and
 adding magnets.
+
+## Container image
+
+Each GitHub release publishes `ghcr.io/grigoriev/sb-ctrl:<version>`.
+[sb-stack](https://github.com/grigoriev/sb-stack) runs it.
+
+### Verify
+
+Images published after 0.7.1 carry a signed build provenance and an SPDX SBOM
+attestation. Check that this repository's workflow built an image:
+
+```sh
+gh attestation verify oci://ghcr.io/grigoriev/sb-ctrl:<tag> --owner grigoriev
+```
+
+Add `--predicate-type https://spdx.dev/Document/v2.3` to check the SBOM.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Disclaimer
+
+This software is provided "as is", without warranty of any kind, as the LICENSE states. Use
+it at your own risk. Sergey Grigoriev is not liable for damage from its use, as far as the law
+allows. It is published free of charge, outside of any commercial offering, with no
+obligation to support it. Security reports are welcome, see [SECURITY.md](SECURITY.md).
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
