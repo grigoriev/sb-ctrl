@@ -19,7 +19,8 @@ that platform.
 
 CI runs ShellCheck, Hadolint, actionlint, zizmor, `trivy config`, ruff, mypy, the tests,
 SonarCloud, and builds the image, scans it with Trivy and runs the smoke test on it for every
-pull request.
+pull request. A fixable CRITICAL finding fails the build. Fixable HIGH findings go to one
+tracking issue, updated on each push to `main` and closed once the image is clean.
 
 ## Pull requests
 
