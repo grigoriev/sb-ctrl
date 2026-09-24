@@ -1,6 +1,6 @@
 # Deploying sb-ctrl
 
-sb-ctrl runs on the Plex host (`beaver.h.g7v.io`) as a systemd user service
+sb-ctrl runs on the Plex host (here `nas.example.org`) as a systemd user service
 behind a Caddy reverse proxy that terminates TLS. The host is reachable only on
 the LAN and VPN.
 
@@ -58,14 +58,14 @@ lets them survive a service restart and logout.
 
 The host is not publicly reachable, so the HTTP-01 challenge cannot work. Caddy
 solves an ACME **DNS-01** challenge instead, which only needs API access to the
-`g7v.io` DNS zone. Install a Caddy build with your DNS provider's plugin
+DNS zone of the host name. Install a Caddy build with your DNS provider's plugin
 (`xcaddy build --with github.com/caddy-dns/<provider>`; provider `[TBD]` -
 Cloudflare, Route53, deSEC, etc.).
 
 `/etc/caddy/Caddyfile`:
 
 ```caddyfile
-beaver.h.g7v.io {
+nas.example.org {
     tls {
         dns <provider> {env.DNS_API_TOKEN}
     }
@@ -79,12 +79,12 @@ Provide the provider credential to Caddy (e.g. `DNS_API_TOKEN` in
 
 ## 5. Point the client at it
 
-In the Alfred workflow: `seedbox >` -> Set API URL (`https://beaver.h.g7v.io`)
+In the Alfred workflow: `seedbox >` -> Set API URL (`https://nas.example.org`)
 and Set API token (the value from the config). Verify with:
 
 ```sh
-curl -s https://beaver.h.g7v.io/health
-curl -s -H "Authorization: Bearer <token>" https://beaver.h.g7v.io/torrents | jq .
+curl -s https://nas.example.org/health
+curl -s -H "Authorization: Bearer <token>" https://nas.example.org/torrents | jq .
 ```
 
 `GET /docs` serves the OpenAPI schema (useful for the future React client).
