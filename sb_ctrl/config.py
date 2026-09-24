@@ -36,10 +36,10 @@ def _norm_patterns(items: Any) -> list[str]:
 class Config:
     """Resolved configuration with sensible defaults; empty strings are unset."""
 
-    rtorrent_url: str = "https://sb.mim.box.ca/xmlrpc"
+    rtorrent_url: str = "https://seedbox.example.org/xmlrpc"
     rtorrent_user: str = ""
     rtorrent_pass: str = ""
-    sftp_host: str = "sb.g7v.io"
+    sftp_host: str = "seedbox.example.org"
     sftp_user: str = ""
     sftp_base: str = "files"
     tmdb_key: str = ""

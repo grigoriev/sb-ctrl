@@ -22,6 +22,10 @@ The project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - CHANGELOG.md, and Verify, Contributing and Disclaimer sections in the README.
 
+### Changed
+
+- Use neutral example hosts in the config defaults, the example config and the docs.
+
 ### Fixed
 
 - Reject a transfer whose destination is not inside the library root, for example

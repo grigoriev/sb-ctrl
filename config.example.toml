@@ -4,12 +4,12 @@
 staging_root = "/data/.staging"   # MUST be on the same filesystem as the library roots
 
 [rtorrent]
-url  = "https://sb.mim.box.ca/xmlrpc"
+url  = "https://seedbox.example.org/xmlrpc"
 user = "CHANGE_ME"
 pass = "CHANGE_ME"
 
 [sftp]
-host = "sb.g7v.io"
+host = "seedbox.example.org"
 user = ""                         # ssh user on the seedbox; leave empty to use the local one
 base = "files"                    # remote dir that rTorrent base paths live under
 
@@ -20,7 +20,7 @@ lang = "en-US"
 [plex]
 # Read-only view of the library, plus a scan after each delivery. Leave the
 # section out and "already in the library" falls back to the job history.
-url   = "http://10.10.10.10:32400"
+url   = "http://192.0.2.10:32400"
 token = "CHANGE_ME"                # X-Plex-Token of the server owner
 
 [roots]

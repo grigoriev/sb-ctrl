@@ -1,9 +1,9 @@
 # sb-ctrl — Specification (Draft v1)
 
-Server-side **brain + agent** for the seedbox → Plex pipeline. Runs on Ubuntu
-`beaver.h.g7v.io`, written in **Python 3**. Holds all configuration and secrets,
-and exposes a **JSON CLI** that the Mac front-end (`alfred-seedbox-workflow`)
-invokes over SSH. The Mac holds no secrets and no logic.
+Server-side **brain + agent** for the seedbox → Plex pipeline. Runs on the Plex
+host (the NAS, here `nas.example.org`), written in **Python 3**. Holds all
+configuration and secrets, and exposes a **JSON CLI** that the Mac front-end
+(`alfred-seedbox-workflow`) invokes over SSH. The Mac holds no secrets and no logic.
 
 Status: plan only, no implementation. Decisions are locked from the interview;
 `[TBD]` marks values to fill before building.
@@ -15,13 +15,13 @@ Status: plan only, no implementation. Decisions are locked from the interview;
 | System | Role | Access |
 |---|---|---|
 | Clients (`alfred-seedbox-workflow`, a future React UI) | Thin UIs over the REST API | HTTPS + bearer token |
-| **Ubuntu `beaver.h.g7v.io`** — **sb-ctrl** | Backend service + agent: rTorrent, TMDb, naming, transfer, jobs | REST over HTTPS, LAN/VPN-only, always up |
-| whatbox (seedbox) | rTorrent + source files | XML-RPC `https://sb.mim.box.ca/xmlrpc` (Basic auth); SFTP `sftp://sb.g7v.io` (key). Downloads under `files/`. Same host, two DNS names. |
+| **Plex host `nas.example.org`** — **sb-ctrl** | Backend service + agent: rTorrent, TMDb, naming, transfer, jobs | REST over HTTPS, LAN/VPN-only, always up |
+| Seedbox (a hosted seedbox provider) | rTorrent + source files | XML-RPC `https://seedbox.example.org/xmlrpc` (Basic auth); SFTP `sftp://seedbox.example.org` (key). Downloads under `files/`. The two may use different DNS names for the same host. |
 
-**Data flow:** whatbox → (lftp SFTP pull, **on Ubuntu**) → Ubuntu staging → Plex
+**Data flow:** seedbox → (lftp SFTP pull, **on the Plex host**) → staging → Plex
 library. Clients are never in the data path — they only call the API.
 
-Consequence: everything (even listing) needs the client to reach beaver (LAN/VPN).
+Consequence: everything (even listing) needs the client to reach the Plex host (LAN/VPN).
 Accepted — acting requires it anyway, and keeping all creds on the server is the
 point.
 
@@ -34,7 +34,7 @@ point.
   library; `api.py` is a thin FastAPI adapter over them.
 - Package `sb_ctrl`, console entry point `sb-ctrl` (`serve`, `run-job`, and
   admin subcommands). `pytest` + FastAPI `TestClient`.
-- Deployed on beaver (venv) behind a reverse proxy; see Deployment.
+- Deployed on the Plex host (venv) behind a reverse proxy; see Deployment.
 - Config file: `~/.config/sb-ctrl/config.toml` (chmod 600). No secrets on any
   client.
 
@@ -44,9 +44,9 @@ point.
 
 | Key | Meaning | Default |
 |---|---|---|
-| `rtorrent.url` | XML-RPC endpoint | `https://sb.mim.box.ca/xmlrpc` |
+| `rtorrent.url` | XML-RPC endpoint | `https://seedbox.example.org/xmlrpc` |
 | `rtorrent.user` / `rtorrent.pass` | Basic auth | `[TBD]` |
-| `sftp.host` | SFTP host for lftp | `sb.g7v.io` |
+| `sftp.host` | SFTP host for lftp | `seedbox.example.org` |
 | `sftp.base` | remote base dir mapped from rTorrent paths | `files` |
 | `tmdb.key` | TMDb API key | `[TBD]` |
 | `tmdb.lang` | search/UI language hint (naming still uses original_title) | `en-US` |
@@ -102,7 +102,7 @@ CLI for admin and debugging.
   managed by a **systemd** service.
 - A **Caddy** reverse proxy terminates TLS with a **Let's Encrypt** certificate
   and forwards to uvicorn. Because the host is VPN-only (port 80 not public),
-  Caddy obtains the cert via the **DNS-01** challenge using the `g7v.io` DNS
+  Caddy obtains the cert via the **DNS-01** challenge using the DNS
   provider's API (provider `[TBD]`).
 - Transfers run as separate `systemd-run --user` units, so they survive a
   service restart; the API tracks them through the job state files.
@@ -114,7 +114,7 @@ CLI for admin and debugging.
 - `d.multicall2` (XML-RPC POST, Basic auth) for the list; fields `d.hash`,
   `d.name`, `d.size_bytes`, `d.complete`, `d.base_path`, `d.is_multi_file`.
 - Filter `complete == 1`. Sort newest first.
-- **Path mapping:** `d.base_path` (absolute on whatbox, e.g.
+- **Path mapping:** `d.base_path` (absolute on the seedbox, e.g.
   `/home/<user>/files/<Title>`) → strip the home prefix → `files/<Title>` (this is
   `base_rel`) → lftp `cd files; mirror <Title>` (folder) / `get <Title>` (file).
 - File subset: `f.multicall` on the hash for per-file path/size/completed. One
@@ -215,7 +215,7 @@ samples, extras/featurettes, `.nfo`, `.txt`, images.
   5. **Atomic `mv`** into the library root (same filesystem). Collisions were
      resolved at `run` time.
   6. `state = done` (or `failed`). **No Plex trigger** (Plex auto-scans). **No
-     whatbox change** (keeps seeding, stays in the list).
+     seedbox change** (keeps seeding, stays in the list).
 - **Concurrency:** multiple jobs may run in parallel; one job = one torrent.
 - **Retry:** manual only (`retry <id>`); `-c` resumes.
 
@@ -229,7 +229,7 @@ samples, extras/featurettes, `.nfo`, `.txt`, images.
 
 ## 10. Security
 
-- All secrets in `config.toml` (chmod 600) on beaver. The Mac never sees them.
+- All secrets in `config.toml` (chmod 600) on the Plex host. The Mac never sees them.
 - SSH/SFTP via keys; the worker runs as the SSH user (chown allowed, no sudo).
 - Creds passed to curl/lftp via config/`--netrc`/stdin, never argv.
 
@@ -237,8 +237,8 @@ samples, extras/featurettes, `.nfo`, `.txt`, images.
 
 - 4 library roots; `staging_root` (same FS as libraries).
 - `perms.owner:group` + modes.
-- `tmdb.key`; `rtorrent.user/pass`; exact whatbox home prefix for path mapping.
-- Confirm `systemd --user` + linger on beaver.
+- `tmdb.key`; `rtorrent.user/pass`; exact seedbox home prefix for path mapping.
+- Confirm `systemd --user` + linger on the Plex host.
 
 ## 12. Build phasing
 
