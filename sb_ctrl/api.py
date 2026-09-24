@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 import hmac
+import logging
 import xmlrpc.client
 from pathlib import Path
 from typing import Annotated, Any
@@ -36,6 +37,8 @@ _NOT_FOUND = "job not found"
 _NO_TORRENT = "torrent not found"
 _JOB_ERRORS: dict[int | str, dict[str, Any]] = {404: {"description": _NOT_FOUND}}
 _TORRENT_ERRORS: dict[int | str, dict[str, Any]] = {404: {"description": _NO_TORRENT}}
+
+_log = logging.getLogger(__name__)
 
 
 def _find_job(cfg: Config, job_id: str) -> Path | None:
@@ -81,6 +84,29 @@ def login_configured(cfg: Config) -> bool:
     return bool(cfg.auth_user and cfg.auth_password_hash and cfg.auth_secret)
 
 
+def _same(given: str, expected: str) -> bool:
+    """Compare a client value with a secret in constant time.
+
+    Both sides go in as UTF-8 bytes: ``compare_digest`` refuses non-ASCII str.
+    """
+    return hmac.compare_digest(given.encode(), expected.encode())
+
+
+def warn_if_open(cfg: Config) -> bool:
+    """Log a warning when neither a token nor a login protects the API.
+
+    The API stays open in that case so a fresh install can be set up. The
+    warning makes sure an open API is a choice, not an accident.
+    """
+    if cfg.api_token or login_configured(cfg):
+        return False
+    _log.warning(
+        "sb-ctrl: authentication is off, every route is open to anyone who can reach the port. "
+        "Set [api] token, or [auth] user, password_hash and secret."
+    )
+    return True
+
+
 def require_token(
     cfg: ConfigDep,
     authorization: Annotated[str | None, Header()] = None,
@@ -92,7 +118,7 @@ def require_token(
     and the session cookie a browser gets from /login. When neither is
     configured (fresh install) the API is open, so setup works before then.
     """
-    if cfg.api_token and authorization == f"Bearer {cfg.api_token}":
+    if cfg.api_token and authorization is not None and _same(authorization, f"Bearer {cfg.api_token}"):
         return
     if login_configured(cfg) and sb_session and auth.session_user(cfg.auth_secret, sb_session):
         return
@@ -135,7 +161,7 @@ def _add_session_routes(app: FastAPI) -> None:
     def login(req: LoginRequest, response: Response, cfg: ConfigDep) -> dict[str, Any]:
         if not login_configured(cfg):
             raise HTTPException(status_code=400, detail="login not configured")
-        ok = hmac.compare_digest(req.user, cfg.auth_user) and auth.verify_password(req.password, cfg.auth_password_hash)
+        ok = _same(req.user, cfg.auth_user) and auth.verify_password(req.password, cfg.auth_password_hash)
         if not ok:
             raise HTTPException(status_code=401, detail="bad credentials")
         ttl = cfg.auth_ttl_hours * 3600

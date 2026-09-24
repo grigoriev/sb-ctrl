@@ -8,6 +8,9 @@ The project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Security
 
+- Compare the bearer token in constant time.
+- Compare the login user name as bytes, so a non-ASCII name gets 401, not 500.
+- Log a warning at startup when the API has no authentication.
 - Audit the workflows with actionlint and zizmor in a new `lint` job.
 - Lint the Dockerfile with Hadolint and `trivy config` in the `lint` job.
 - Add the OpenSSF Scorecard workflow and its README badge.

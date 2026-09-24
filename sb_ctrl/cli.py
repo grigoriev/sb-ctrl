@@ -118,9 +118,10 @@ def _cmd_hash_password(stream: IO[str], from_stdin: bool) -> dict[str, Any]:
 def _cmd_serve() -> dict[str, Any]:  # pragma: no cover - runs a blocking server
     import uvicorn
 
-    from sb_ctrl.api import app
+    from sb_ctrl.api import app, warn_if_open
 
     cfg = load_config()
+    warn_if_open(cfg)
     uvicorn.run(app, host=cfg.api_host, port=cfg.api_port)
     return {"ok": True}
 

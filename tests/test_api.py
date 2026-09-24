@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import os
 from dataclasses import replace
 from pathlib import Path
@@ -64,6 +65,49 @@ def test_token_is_required_when_configured() -> None:
 
 def test_open_when_no_token() -> None:
     assert _client(Config()).get("/config").status_code == 200
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        "Bearer wrong!",  # same length as the right one
+        "Bearer secre",  # one character short
+        "Bearer secret-and-more",  # longer
+        "Bearer sécret".encode(),  # non-ASCII must not raise
+        "secret",  # no scheme
+        "",
+    ],
+)
+def test_a_wrong_token_is_refused(header: str | bytes) -> None:
+    client = _client(Config(api_token="secret"))
+    assert client.get("/config", headers={"Authorization": header}).status_code == 401
+
+
+def test_the_token_is_compared_in_constant_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[bytes, bytes]] = []
+    real = hmac.compare_digest
+
+    def spy(a: bytes, b: bytes) -> bool:
+        calls.append((a, b))
+        return real(a, b)
+
+    monkeypatch.setattr(hmac, "compare_digest", spy)
+    client = _client(Config(api_token="secret"))
+    assert client.get("/config", headers={"Authorization": "Bearer secret"}).status_code == 200
+    assert calls == [(b"Bearer secret", b"Bearer secret")]
+
+
+def test_an_open_api_logs_a_warning(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level("WARNING", logger="sb_ctrl.api"):
+        assert api.warn_if_open(Config()) is True
+    assert "authentication is off" in caplog.text
+
+
+def test_a_protected_api_logs_no_warning(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level("WARNING", logger="sb_ctrl.api"):
+        assert api.warn_if_open(Config(api_token="secret")) is False
+        assert api.warn_if_open(_login_cfg()) is False
+    assert caplog.text == ""
 
 
 def test_torrents(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -192,6 +236,11 @@ def test_login_rejects_a_wrong_password() -> None:
 def test_login_rejects_a_wrong_user() -> None:
     client = _tls_client(_login_cfg())
     assert client.post("/login", json={"user": "someone", "password": PASSWORD}).status_code == 401
+
+
+def test_login_rejects_a_non_ascii_user() -> None:
+    client = _tls_client(_login_cfg())
+    assert client.post("/login", json={"user": "sergéy", "password": PASSWORD}).status_code == 401
 
 
 def test_login_without_configuration_is_refused() -> None:
