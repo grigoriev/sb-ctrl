@@ -414,3 +414,9 @@ def test_torrents_survive_a_seedbox_that_cannot_list_files(monkeypatch: pytest.M
     item = _client(Config()).get("/torrents").json()["items"][0]
     assert item["name"] == "Movie"
     assert "library" not in item
+
+
+def test_the_schema_documents_the_login_errors() -> None:
+    responses = api.create_app().openapi()["paths"]["/login"]["post"]["responses"]
+    assert responses["400"]["description"] == "login not configured"
+    assert responses["401"]["description"] == "bad credentials"

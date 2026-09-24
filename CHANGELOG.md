@@ -31,6 +31,7 @@ The project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Document the 400 answer of `POST /login` in the OpenAPI schema.
 - Reject a transfer whose destination is not inside the library root, for example
   a name that sanitizes to nothing.
 - Run CI once per commit on a Renovate branch: drop `renovate/**` from the push trigger.

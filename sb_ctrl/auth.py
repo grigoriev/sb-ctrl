@@ -75,7 +75,7 @@ def session_user(secret: str, cookie: str, now: float | None = None) -> str | No
     try:
         expires = int(parts[1])
         user = _unb64(parts[0]).decode()
-    except ValueError, UnicodeDecodeError:
+    except ValueError:  # UnicodeDecodeError is a ValueError too
         return None
     if expires <= (time.time() if now is None else now):
         return None
