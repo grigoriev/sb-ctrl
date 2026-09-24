@@ -73,4 +73,16 @@ def plan(cfg: Config, torrent: dict[str, Any], kind: str, name: str | None = Non
         "staging_root": cfg.staging_root,
         "plex": {"url": cfg.plex_url, "token": cfg.plex_token},
     }
-    return {"job_spec": spec, "dest_path": dest_path, "collision": os.path.exists(dest_path)}
+    return {"job_spec": spec, "dest_path": dest_path, "collision": os.path.exists(_inside(root, dest_path))}
+
+
+def _inside(root: str, path: str) -> str:
+    """Return ``path`` normalized, or fail when it is not below ``root``.
+
+    ``sanitize`` removes the separator, so a name cannot climb out. A name that
+    sanitizes to nothing would still point at the root itself.
+    """
+    normalized = os.path.normpath(path)
+    if not normalized.startswith(os.path.normpath(root) + os.sep):
+        raise ValueError(f"destination is not inside the library root: {path}")
+    return normalized

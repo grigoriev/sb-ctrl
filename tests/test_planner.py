@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from sb_ctrl.config import Config
 from sb_ctrl.planner import plan
 
@@ -56,3 +58,15 @@ def test_name_override_and_collision(tmp_path: Path) -> None:
     result = plan(cfg, _torrent("raw name", "files/raw name", True), "series", name="Chosen")
     assert result["job_spec"]["name"] == "Chosen"
     assert result["collision"] is True
+
+
+def test_name_that_sanitizes_to_nothing_is_rejected(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    with pytest.raises(ValueError, match="not inside the library root"):
+        plan(cfg, _torrent("raw name", "files/raw name", True), "series", name="..")
+
+
+def test_episode_basename_cannot_leave_the_root(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    with pytest.raises(ValueError, match="not inside the library root"):
+        plan(cfg, _torrent("Show", "files/..", False), "series")
