@@ -23,6 +23,12 @@ Releases before 0.8.0 are listed on the
   bump pushes without stored credentials, a release run fails when the release exists
   already, and SonarCloud analyzes the tests as tests for Python 3.14.
 
+### Security
+
+- The image no longer ships pip. Nothing uses it at runtime, and the msgpack and
+  setuptools it vendors carry fixable HIGH findings (GHSA-6v7p-g79w-8964,
+  CVE-2025-47273).
+
 ## [0.8.0] - 2026-09-24
 
 ### Security
