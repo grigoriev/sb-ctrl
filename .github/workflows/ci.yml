@@ -132,6 +132,9 @@ jobs:
   image:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -146,14 +149,25 @@ jobs:
           load: true
           tags: sb-ctrl:test
 
-      # Fixable CRITICAL vulnerabilities fail the build, as in the image repos.
+      # Fixable vulnerabilities, as in the intechcore image repos. CRITICAL
+      # fails the build. HIGH goes to a tracking issue only: an unrelated pull
+      # request must not turn red because Debian or PyPI released a fix.
       - name: Scan the image with Trivy
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: sb-ctrl:test
-          exit-code: '1'
-          severity: CRITICAL
+          format: json
+          output: trivy-results.json
+          exit-code: '0'
+          severity: CRITICAL,HIGH
           ignore-unfixed: true
+
+      # Summary, tracking issue on push to main, and failure on CRITICAL.
+      - name: Report the findings
+        uses: ./.github/actions/trivy-report
+        with:
+          report: ${{ github.event_name == 'push' }}
+          token: ${{ github.token }}
 
       - name: Smoke test the image
         run: tests/smoke-image.sh sb-ctrl:test

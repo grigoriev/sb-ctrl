@@ -22,6 +22,9 @@ Releases before 0.8.0 are listed on the
 - Align the repository with the shared baseline: CI jobs have time limits, the version
   bump pushes without stored credentials, a release run fails when the release exists
   already, and SonarCloud analyzes the tests as tests for Python 3.14.
+- CI also reports fixable HIGH findings of the image scan: in the job summary, and on
+  `main` in one tracking issue that closes once the image is clean. A fixable CRITICAL
+  finding still fails the build.
 
 ### Security
 
