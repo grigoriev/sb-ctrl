@@ -3,6 +3,7 @@
 [![CI](https://github.com/grigoriev/sb-ctrl/actions/workflows/ci.yml/badge.svg)](https://github.com/grigoriev/sb-ctrl/actions/workflows/ci.yml)
 [![Publish image](https://github.com/grigoriev/sb-ctrl/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/grigoriev/sb-ctrl/actions/workflows/docker-publish.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/grigoriev/sb-ctrl/badge)](https://scorecard.dev/viewer/?uri=github.com/grigoriev/sb-ctrl)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14805/badge)](https://www.bestpractices.dev/projects/14805)
 [![Release](https://img.shields.io/github/v/release/grigoriev/sb-ctrl)](https://github.com/grigoriev/sb-ctrl/releases)
 [![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
 [![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
