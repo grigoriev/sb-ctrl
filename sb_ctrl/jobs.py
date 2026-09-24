@@ -15,6 +15,8 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+STATE_FILE = "state.json"
+
 
 def jobs_dir(staging_root: str) -> Path:
     return Path(staging_root) / ".jobs"
@@ -79,7 +81,7 @@ def read_spec(job_dir: Path) -> dict[str, Any]:
 def write_state(job_dir: Path, **fields: Any) -> None:
     """Merge ``fields`` into the job's state file, keeping id and name."""
     state: dict[str, Any] = {}
-    path = job_dir / "state.json"
+    path = job_dir / STATE_FILE
     if path.is_file():
         try:
             state = json.loads(path.read_text())
@@ -153,7 +155,7 @@ def reconcile(staging_root: str) -> None:
 
 
 def read_state(job_dir: Path) -> dict[str, Any]:
-    data: dict[str, Any] = json.loads((job_dir / "state.json").read_text())
+    data: dict[str, Any] = json.loads((job_dir / STATE_FILE).read_text())
     return data
 
 
@@ -194,7 +196,7 @@ def list_jobs(staging_root: str) -> list[dict[str, Any]]:
         return []
     out: list[dict[str, Any]] = []
     for entry in sorted(root.iterdir()):
-        state = entry / "state.json"
+        state = entry / STATE_FILE
         if not state.is_file():
             continue
         try:

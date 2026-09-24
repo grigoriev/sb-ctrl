@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from sb_ctrl import __version__, auth, launcher, planner, plex, tmdb
 from sb_ctrl.config import Config, load_config
 from sb_ctrl.jobs import (
+    STATE_FILE,
     by_source,
     create_job,
     delete_job,
@@ -157,7 +158,10 @@ def _add_session_routes(app: FastAPI) -> None:
         user = auth.session_user(cfg.auth_secret, sb_session) if login_configured(cfg) and sb_session else None
         return {"login_required": login_configured(cfg) and user is None, "user": user}
 
-    @app.post("/login", responses={401: {"description": "bad credentials"}})
+    @app.post(
+        "/login",
+        responses={400: {"description": "login not configured"}, 401: {"description": "bad credentials"}},
+    )
     def login(req: LoginRequest, response: Response, cfg: ConfigDep) -> dict[str, Any]:
         if not login_configured(cfg):
             raise HTTPException(status_code=400, detail="login not configured")
@@ -283,7 +287,7 @@ def _add_job_routes(app: FastAPI) -> None:
     def job(job_id: str, cfg: ConfigDep) -> dict[str, Any]:
         reconcile(cfg.staging_root)
         job_dir = _job_dir_or_404(cfg, job_id)
-        if not (job_dir / "state.json").is_file():
+        if not (job_dir / STATE_FILE).is_file():
             raise HTTPException(status_code=404, detail=_NOT_FOUND)
         return read_state(job_dir)
 
@@ -306,7 +310,7 @@ def _add_job_routes(app: FastAPI) -> None:
     def remove(job_id: str, cfg: ConfigDep) -> dict[str, Any]:
         """Drop a finished or failed job from the list, staging leftovers too."""
         job_dir = _job_dir_or_404(cfg, job_id)
-        state = read_state(job_dir).get("state") if (job_dir / "state.json").is_file() else None
+        state = read_state(job_dir).get("state") if (job_dir / STATE_FILE).is_file() else None
         if state == "active":
             raise HTTPException(status_code=409, detail="job is running")
         delete_job(cfg.staging_root, job_dir)
