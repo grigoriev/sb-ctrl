@@ -9,6 +9,8 @@ Releases before 0.8.0 are listed on the
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-09-25
+
 ### Changed
 
 - Release with the Bump Version & Release workflow. Its `v*` tag builds and pushes
