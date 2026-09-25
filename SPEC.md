@@ -1,4 +1,4 @@
-# sb-ctrl — Specification (Draft v1)
+# sb-ctrl: Specification (Draft v1)
 
 Server-side **brain + agent** for the seedbox → Plex pipeline. Runs on the Plex
 host (the NAS, here `nas.example.org`), written in **Python 3**. Holds all
@@ -15,14 +15,14 @@ Status: plan only, no implementation. Decisions are locked from the interview;
 | System | Role | Access |
 |---|---|---|
 | Clients (`alfred-seedbox-workflow`, a future React UI) | Thin UIs over the REST API | HTTPS + bearer token |
-| **Plex host `nas.example.org`** — **sb-ctrl** | Backend service + agent: rTorrent, TMDb, naming, transfer, jobs | REST over HTTPS, LAN/VPN-only, always up |
+| **Plex host `nas.example.org`** - **sb-ctrl** | Backend service + agent: rTorrent, TMDb, naming, transfer, jobs | REST over HTTPS, LAN/VPN-only, always up |
 | Seedbox (a hosted seedbox provider) | rTorrent + source files | XML-RPC `https://seedbox.example.org/xmlrpc` (Basic auth); SFTP `sftp://seedbox.example.org` (key). Downloads under `files/`. The two may use different DNS names for the same host. |
 
 **Data flow:** seedbox → (lftp SFTP pull, **on the Plex host**) → staging → Plex
-library. Clients are never in the data path — they only call the API.
+library. Clients are never in the data path. They only call the API.
 
 Consequence: everything (even listing) needs the client to reach the Plex host (LAN/VPN).
-Accepted — acting requires it anyway, and keeping all creds on the server is the
+Accepted: acting requires it anyway, and keeping all creds on the server is the
 point.
 
 ---
@@ -81,17 +81,17 @@ opens the API on purpose. TLS is terminated by a reverse proxy (see Deployment).
 
 | Method + path | Body / params | Result |
 |---|---|---|
-| `GET /health` | — | `{ok, version}` (no auth) |
-| `GET /torrents` | — | `{items:[{hash,name,size,is_multi,base_rel,finished,job?,delivered,library?}]}` completed, newest first |
-| `GET /torrents/{hash}/files` | — | `{files:[{index,path,size,done}]}` *(later phase)* |
+| `GET /health` | - | `{ok, version}` (no auth) |
+| `GET /torrents` | - | `{items:[{hash,name,size,is_multi,base_rel,finished,job?,delivered,library?}]}` completed, newest first |
+| `GET /torrents/{hash}/files` | - | `{files:[{index,path,size,done}]}` *(later phase)* |
 | `GET /search` | `kind`, `name` | `{guess_kind, candidates:[...]}` *(TMDb phase)* |
 | `POST /plan` | `{hash, kind, name?}` | `{job_spec, dest_path, collision}` (preview, no side effects) |
-| `POST /jobs` | `{job_spec, collision: overwrite\|skip\|cancel}` | `{job_id, launcher}` — creates and launches the job |
-| `GET /jobs` | — | `{jobs:[{id,name,state,pct,rate,eta,error?}]}` |
-| `GET /jobs/{id}` | — | the job's state |
-| `POST /jobs/{id}/retry` | — | `{job_id}` |
-| `GET /config` | — | effective config (secrets redacted) |
-| `PUT /config` | — | update config *(later phase)* |
+| `POST /jobs` | `{job_spec, collision: overwrite\|skip\|cancel}` | `{job_id, launcher}`: creates and launches the job |
+| `GET /jobs` | - | `{jobs:[{id,name,state,pct,rate,eta,error?}]}` |
+| `GET /jobs/{id}` | - | the job's state |
+| `POST /jobs/{id}/retry` | - | `{job_id}` |
+| `GET /config` | - | effective config (secrets redacted) |
+| `PUT /config` | - | update config *(later phase)* |
 
 A thin CLI remains for the service entrypoint and the worker:
 `sb-ctrl serve` (run the API under uvicorn), `sb-ctrl run-job <id>` (invoked by
@@ -208,12 +208,12 @@ samples, extras/featurettes, `.nfo`, `.txt`, images.
   enabled so it survives SSH/Mac disconnect). `nohup` fallback. The worker is
   `sb-ctrl run-job <id>`.
 - Worker steps:
-  1. lftp pull into `<staging_root>/<id>/` — `mirror -c` (folder) / `get -c`
+  1. lftp pull into `<staging_root>/<id>/`: `mirror -c` (folder) / `get -c`
      (file), resume, optional `net:limit-rate` and parallel segments.
   2. **Progress:** `du(staging)/size` → `pct`; rate/ETA from the delta; written to
      `state.json` periodically.
   3. **Organize:** rename to final names; subtitles alongside; skip junk.
-  4. `chown owner:group`, `chmod dir_mode/file_mode` (SSH user can chown — no sudo).
+  4. `chown owner:group`, `chmod dir_mode/file_mode` (SSH user can chown, no sudo).
   5. **Atomic `mv`** into the library root (same filesystem). Collisions were
      resolved at `run` time.
   6. `state = done` (or `failed`). **No Plex trigger** (Plex auto-scans). **No
