@@ -9,6 +9,11 @@ Releases before 0.8.0 are listed on the
 
 ## [Unreleased]
 
+### Security
+
+- The image applies Debian security updates at build time. It fixes CVE-2026-75804 and
+  CVE-2026-84782 in OpenSSL before the base image carries the fix.
+
 ### Changed
 
 - The docs and the package metadata state the current status: Beta, served over the
