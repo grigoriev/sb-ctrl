@@ -2,11 +2,11 @@
 
 Server-side **brain + agent** for the seedbox → Plex pipeline. Runs on the Plex
 host (the NAS, here `nas.example.org`), written in **Python 3**. Holds all
-configuration and secrets, and exposes a **JSON CLI** that the Mac front-end
-(`alfred-seedbox-workflow`) invokes over SSH. The Mac holds no secrets and no logic.
+configuration and secrets, and exposes a **REST API** (section 4) and a **JSON CLI**.
+The clients (`alfred-seedbox-workflow`, `sb-ctrl-ui`) hold no secrets and no logic.
 
-Status: plan only, no implementation. Decisions are locked from the interview;
-`[TBD]` marks values to fill before building.
+Status: P0 to P3 and the REST API are implemented, P4 is open (section 12).
+`[TBD]` marks values to fill per deployment.
 
 ---
 
@@ -14,7 +14,7 @@ Status: plan only, no implementation. Decisions are locked from the interview;
 
 | System | Role | Access |
 |---|---|---|
-| Clients (`alfred-seedbox-workflow`, a future React UI) | Thin UIs over the REST API | HTTPS + bearer token |
+| Clients (`alfred-seedbox-workflow`, `sb-ctrl-ui`) | Thin UIs over the REST API | HTTPS + bearer token |
 | **Plex host `nas.example.org`** - **sb-ctrl** | Backend service + agent: rTorrent, TMDb, naming, transfer, jobs | REST over HTTPS, LAN/VPN-only, always up |
 | Seedbox (a hosted seedbox provider) | rTorrent + source files | XML-RPC `https://seedbox.example.org/xmlrpc` (Basic auth); SFTP `sftp://seedbox.example.org` (key). Downloads under `files/`. The two may use different DNS names for the same host. |
 
@@ -72,7 +72,7 @@ point.
 
 ## 4. REST API (FastAPI)
 
-Clients (the Alfred workflow, a future React UI) talk to a **FastAPI** service.
+Clients (the Alfred workflow, the React UI `sb-ctrl-ui`) talk to a **FastAPI** service.
 Pydantic models formalize the contract and produce an OpenAPI schema at `/docs`.
 A bearer token (`Authorization: Bearer <token>`) guards every route except
 `/health`, `/me` and `/login`; a browser session from `[auth]` works too. With

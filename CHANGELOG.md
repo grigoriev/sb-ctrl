@@ -9,6 +9,11 @@ Releases before 0.8.0 are listed on the
 
 ## [Unreleased]
 
+### Changed
+
+- The docs and the package metadata state the current status: Beta, served over the
+  REST API, with TMDb naming in place.
+
 ## [0.8.1] - 2026-09-25
 
 ### Changed
