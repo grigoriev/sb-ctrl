@@ -16,9 +16,9 @@
 Backend service and agent for the seedbox to Plex pipeline. Runs on the Plex
 host, exposes a **REST API** (FastAPI), lists completed torrents on the rTorrent
 seedbox, and pulls a chosen title with `lftp`, sets permissions, and moves it
-into the right Plex library (TMDb-based renaming lands in a later phase). Clients
-are the [alfred-seedbox-workflow](https://github.com/grigoriev/alfred-seedbox-workflow)
-and, later, a React UI.
+into the right Plex library under its TMDb name. Clients are the
+[alfred-seedbox-workflow](https://github.com/grigoriev/alfred-seedbox-workflow)
+and [sb-ctrl-ui](https://github.com/grigoriev/sb-ctrl-ui).
 
 The full design is in [SPEC.md](SPEC.md).
 

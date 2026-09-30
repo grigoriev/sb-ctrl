@@ -1,5 +1,5 @@
-"""Filename helpers. TMDb-based naming arrives in a later phase; for now this is
-the shared sanitizer and the kind-to-root mapping (SPEC.md sections 7 and 3).
+"""Filename helpers: the shared sanitizer and the kind-to-root mapping (SPEC.md
+sections 7 and 3). The TMDb match that names a title comes from ``tmdb``.
 """
 
 from __future__ import annotations

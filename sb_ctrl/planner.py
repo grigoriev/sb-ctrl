@@ -1,7 +1,7 @@
 """Turn a chosen torrent + kind into a transfer job spec (SPEC.md sections 7-8).
 
-Phase P1 transfers the whole title without renaming its contents; TMDb-based
-renaming enriches this in a later phase.
+The name is the TMDb match the client picked. A single-file movie is renamed to
+``Name (Year).ext``; a series folder is laid out by ``episodes`` in the worker.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ def plan(cfg: Config, torrent: dict[str, Any], kind: str, name: str | None = Non
         final = f"{safe}{ext}"
         dest_path = f"{root}/{final}" if cfg.movie_layout == "flat" else f"{root}/{safe}/{final}"
     else:
-        # a single-file episode keeps its name until the series-naming phase
+        # a single-file episode keeps its name; only a series folder is laid out
         staging_item = basename
         dest_path = f"{root}/{safe}/{basename}"
 

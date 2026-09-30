@@ -2,11 +2,11 @@
 
 Server-side **brain + agent** for the seedbox → Plex pipeline. Runs on the Plex
 host (the NAS, here `nas.example.org`), written in **Python 3**. Holds all
-configuration and secrets, and exposes a **JSON CLI** that the Mac front-end
-(`alfred-seedbox-workflow`) invokes over SSH. The Mac holds no secrets and no logic.
+configuration and secrets, and exposes a **REST API** (section 4) and a **JSON CLI**.
+The clients (`alfred-seedbox-workflow`, `sb-ctrl-ui`) hold no secrets and no logic.
 
-Status: plan only, no implementation. Decisions are locked from the interview;
-`[TBD]` marks values to fill before building.
+Status: P0 to P3 and the REST API are implemented, P4 is open (section 12).
+`[TBD]` marks values to fill per deployment.
 
 ---
 
