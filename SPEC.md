@@ -14,7 +14,7 @@ Status: P0 to P3 and the REST API are implemented, P4 is open (section 12).
 
 | System | Role | Access |
 |---|---|---|
-| Clients (`alfred-seedbox-workflow`, a future React UI) | Thin UIs over the REST API | HTTPS + bearer token |
+| Clients (`alfred-seedbox-workflow`, `sb-ctrl-ui`) | Thin UIs over the REST API | HTTPS + bearer token |
 | **Plex host `nas.example.org`** - **sb-ctrl** | Backend service + agent: rTorrent, TMDb, naming, transfer, jobs | REST over HTTPS, LAN/VPN-only, always up |
 | Seedbox (a hosted seedbox provider) | rTorrent + source files | XML-RPC `https://seedbox.example.org/xmlrpc` (Basic auth); SFTP `sftp://seedbox.example.org` (key). Downloads under `files/`. The two may use different DNS names for the same host. |
 
@@ -72,7 +72,7 @@ point.
 
 ## 4. REST API (FastAPI)
 
-Clients (the Alfred workflow, a future React UI) talk to a **FastAPI** service.
+Clients (the Alfred workflow, the React UI `sb-ctrl-ui`) talk to a **FastAPI** service.
 Pydantic models formalize the contract and produce an OpenAPI schema at `/docs`.
 A bearer token (`Authorization: Bearer <token>`) guards every route except
 `/health`, `/me` and `/login`; a browser session from `[auth]` works too. With
