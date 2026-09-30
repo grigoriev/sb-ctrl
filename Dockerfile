@@ -12,8 +12,10 @@ FROM python:3.14-slim@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343
 
 # lftp performs the mirror/get transfers; openssh-client backs lftp's sftp.
 # The versions follow the pinned base image, so they are not pinned here.
-# hadolint ignore=DL3008
+# The upgrade applies Debian security fixes that the base image does not carry yet.
+# hadolint ignore=DL3005,DL3008
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends lftp openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
