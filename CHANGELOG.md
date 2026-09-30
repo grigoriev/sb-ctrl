@@ -9,6 +9,8 @@ Releases before 0.8.0 are listed on the
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-09-30
+
 ### Security
 
 - The image applies Debian security updates at build time. It fixes CVE-2026-75804 and
