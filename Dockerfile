@@ -8,7 +8,7 @@
 # during the build, so the final image does not carry it.
 FROM ghcr.io/astral-sh/uv:0.12.23@sha256:61d393e44e249f2e4b526b6c7ddcecce245946826e608e11c93ad4f5bba55b21 AS uv
 
-FROM python:3.14-slim@sha256:0741d101873c12ab927e6f8653feb8862b9bd58771177acb1b885b95141f91b4
+FROM python:3.14-slim@sha256:c3e521df8b2b498a7a682e7e18676771cb80c6b75b8699af886b2d554ce40151
 
 # lftp performs the mirror/get transfers; openssh-client backs lftp's sftp.
 # The versions follow the pinned base image, so they are not pinned here.
