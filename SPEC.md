@@ -85,13 +85,20 @@ opens the API on purpose. TLS is terminated by a reverse proxy (see Deployment).
 | `GET /torrents` | - | `{items:[{hash,name,size,is_multi,base_rel,finished,job?,delivered,library?}]}` completed, newest first |
 | `GET /torrents/{hash}/files` | - | `{files:[{index,path,size,done}]}` *(later phase)* |
 | `GET /search` | `kind`, `name` | `{guess_kind, candidates:[...]}` *(TMDb phase)* |
-| `POST /plan` | `{hash, kind, name?}` | `{job_spec, dest_path, collision}` (preview, no side effects) |
+| `POST /plan` | `{hash, kind, name?}` | `{job_spec, dest_path, collision, existing_size?}` (preview, no side effects) |
 | `POST /jobs` | `{job_spec, collision: overwrite\|skip\|cancel}` | `{job_id, launcher}`: creates and launches the job |
 | `GET /jobs` | - | `{jobs:[{id,name,state,pct,rate,eta,error?}]}` |
 | `GET /jobs/{id}` | - | the job's state |
 | `POST /jobs/{id}/retry` | - | `{job_id}` |
 | `GET /config` | - | effective config (secrets redacted) |
 | `PUT /config` | - | update config *(later phase)* |
+
+`existing_size` is the size in bytes of a file already at `dest_path`. It is absent when the
+destination is free or a folder. A client compares it with the torrent size to tell the same
+release from another one. `POST /jobs` with `collision: skip` returns it next to `skipped`.
+
+`POST /plan` and `POST /jobs` answer 409 when rTorrent reports no path for the torrent. No job
+is created then, since lftp would have nothing to pull.
 
 A thin CLI remains for the service entrypoint and the worker:
 `sb-ctrl serve` (run the API under uvicorn), `sb-ctrl run-job <id>` (invoked by
@@ -114,10 +121,12 @@ CLI for admin and debugging.
 ## 5. rTorrent integration
 
 - `d.multicall2` (XML-RPC POST, Basic auth) for the list; fields `d.hash`,
-  `d.name`, `d.size_bytes`, `d.complete`, `d.base_path`, `d.is_multi_file`.
+  `d.name`, `d.size_bytes`, `d.complete`, `d.directory`, `d.is_multi_file`.
 - Filter `complete == 1`. Sort newest first.
-- **Path mapping:** `d.base_path` (absolute on the seedbox, e.g.
-  `/home/<user>/files/<Title>`) → strip the home prefix → `files/<Title>` (this is
+- **Path mapping:** the download path, absolute on the seedbox (e.g.
+  `/home/<user>/files/<Title>`). It is `d.directory` for a folder, and `d.directory`/`d.name`
+  for a single file. Not `d.base_path`: rTorrent answers it with an empty string once a torrent
+  is closed. Then strip the home prefix → `files/<Title>` (this is
   `base_rel`) → lftp `cd files; mirror <Title>` (folder) / `get <Title>` (file).
 - File subset: `f.multicall` on the hash for per-file path/size/completed. One
   `system.multicall` carries the request for every torrent of the list.

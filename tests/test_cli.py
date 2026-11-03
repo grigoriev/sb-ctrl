@@ -121,6 +121,33 @@ def test_plan_unknown_hash_errors(
     assert json.loads(capsys.readouterr().err)["error"] == "torrent not found"
 
 
+class _PathlessRT(_FakeRT):
+    def list_completed(self) -> list[Torrent]:
+        return [replace(ONE, base_path="", base_rel="")]
+
+
+def test_plan_refuses_a_torrent_without_a_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("SB_CTRL_CONFIG", str(_write_cfg(tmp_path)))
+    monkeypatch.setattr(cli, "RTorrent", _PathlessRT)
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"hash": "H1", "kind": "movie"})))
+    assert cli.main(["plan"]) == 1
+    assert json.loads(capsys.readouterr().err)["error"] == "the seedbox reports no path for this torrent"
+
+
+def test_run_refuses_a_spec_without_a_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("SB_CTRL_CONFIG", str(_write_cfg(tmp_path)))
+    monkeypatch.setattr(launcher, "launch", lambda job_id: pytest.fail("launched a job without a path"))
+    spec = {"name": "New", "dest_path": str(tmp_path / "movies" / "New"), "source": {"base_rel": ""}}
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"job_spec": spec, "collision": "overwrite"})))
+    assert cli.main(["run"]) == 1
+    assert json.loads(capsys.readouterr().err)["error"] == "the seedbox reports no path for this torrent"
+    assert not (tmp_path / "staging" / ".jobs").exists()
+
+
 def test_run_creates_job_and_launches(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -132,7 +159,12 @@ def test_run_creates_job_and_launches(
         return "systemd"
 
     monkeypatch.setattr(launcher, "launch", fake_launch)
-    spec = {"name": "New", "kind": "movie", "dest_path": str(tmp_path / "movies" / "New")}
+    spec = {
+        "name": "New",
+        "kind": "movie",
+        "dest_path": str(tmp_path / "movies" / "New"),
+        "source": {"base_rel": "files/New.mkv"},
+    }
     monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"job_spec": spec, "collision": "overwrite"})))
     assert cli.main(["run"]) == 0
     out = json.loads(capsys.readouterr().out)
@@ -146,7 +178,7 @@ def test_run_skips_on_collision(
     monkeypatch.setenv("SB_CTRL_CONFIG", str(_write_cfg(tmp_path)))
     dest = tmp_path / "movies" / "Old"
     dest.mkdir(parents=True)
-    spec = {"name": "Old", "dest_path": str(dest)}
+    spec = {"name": "Old", "dest_path": str(dest), "source": {"base_rel": "files/Old.mkv"}}
     monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"job_spec": spec, "collision": "skip"})))
     assert cli.main(["run"]) == 0
     assert json.loads(capsys.readouterr().out)["skipped"] is True

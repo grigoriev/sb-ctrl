@@ -4,9 +4,10 @@ from typing import Any
 
 from sb_ctrl.rtorrent import RpcRow, RTorrent
 
-# hash, name, size, complete, base_path, is_multi, finished
+# hash, name, size, complete, directory, is_multi, finished
+# d.directory is the parent of a single file, and the folder of a multi-file torrent.
 ROWS: list[RpcRow] = [
-    ["H1", "Old Movie", 100, 1, "/home/u/files/Old Movie.mkv", 0, 1000],
+    ["H1", "Old Movie.mkv", 100, 1, "/home/u/files", 0, 1000],
     ["H2", "New Show", 200, 1, "/home/u/files/New Show", 1, 3000],
     ["H3", "Downloading", 50, 0, "/home/u/files/Downloading", 1, 2000],
 ]
@@ -22,7 +23,7 @@ def _client(rows: list[RpcRow]) -> RTorrent:
 
 def test_lists_only_completed_newest_first() -> None:
     torrents = _client(ROWS).list_completed()
-    assert [t.name for t in torrents] == ["New Show", "Old Movie"]
+    assert [t.name for t in torrents] == ["New Show", "Old Movie.mkv"]
 
 
 def test_maps_fields_and_relative_path() -> None:
@@ -34,11 +35,24 @@ def test_maps_fields_and_relative_path() -> None:
     assert show.base_rel == "files/New Show"
     movie = torrents[1]
     assert movie.is_multi is False
+    assert movie.base_path == "/home/u/files/Old Movie.mkv"
     assert movie.base_rel == "files/Old Movie.mkv"
 
 
+def test_a_closed_torrent_keeps_its_path() -> None:
+    # rTorrent answers d.base_path with "" for a closed torrent, d.directory still holds the path.
+    rows: list[RpcRow] = [["H", "Closed.mkv", 1, 1, "/home/u/files", 0, 5]]
+    assert _client(rows).list_completed()[0].base_rel == "files/Closed.mkv"
+
+
+def test_a_torrent_without_a_directory_has_no_path() -> None:
+    rows: list[RpcRow] = [["H", "Lost.mkv", 1, 1, "", 0, 5]]
+    torrent = _client(rows).list_completed()[0]
+    assert (torrent.base_path, torrent.base_rel) == ("", "")
+
+
 def test_rel_path_without_marker_strips_leading_slash() -> None:
-    rows: list[RpcRow] = [["H", "X", 1, 1, "/other/place/X", 0, 5]]
+    rows: list[RpcRow] = [["H", "X", 1, 1, "/other/place/X", 1, 5]]
     assert _client(rows).list_completed()[0].base_rel == "other/place/X"
 
 

@@ -9,6 +9,22 @@ Releases before 0.8.0 are listed on the
 
 ## [Unreleased]
 
+### Added
+
+- `POST /plan`, and `POST /jobs` when it skips, report `existing_size`: the size of a
+  file already at the destination. A client can then tell the same release from another
+  one before it replaces the file.
+
+### Fixed
+
+- A closed torrent transfers again. Its path came from `d.base_path`, which rTorrent
+  leaves empty once a torrent is closed. lftp then got an empty path and the job failed
+  at once. The path now comes from `d.directory`, which rTorrent keeps for a closed
+  torrent too.
+- `POST /plan` and `POST /jobs` answer 409 with "the seedbox reports no path for this
+  torrent" when rTorrent reports no directory either. `sb-ctrl plan` and `sb-ctrl run`
+  refuse it with the same error. No job is created for it any more.
+
 ## [0.8.2] - 2026-09-30
 
 ### Security

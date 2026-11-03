@@ -1,8 +1,8 @@
 """rTorrent XML-RPC client (read-only for now).
 
 Lists completed downloads via ``d.multicall2`` and maps each item's absolute
-``base_path`` on the seedbox to a path relative to the SFTP home, so lftp can
-pull it. See SPEC.md section 5.
+path on the seedbox to a path relative to the SFTP home, so lftp can pull it.
+See SPEC.md section 5.
 """
 
 from __future__ import annotations
@@ -23,10 +23,21 @@ _FIELDS = [
     "d.name=",
     "d.size_bytes=",
     "d.complete=",
-    "d.base_path=",
+    # Not d.base_path: rTorrent answers it with "" once a torrent is closed.
+    "d.directory=",
     "d.is_multi_file=",
     "d.timestamp.finished=",
 ]
+
+
+def _base_path(directory: str, name: str, is_multi: bool) -> str:
+    """The path of the download: the folder of a multi-file torrent, or the file of a single one.
+
+    ``d.directory`` is that folder, or the parent of the single file. Empty when rTorrent knows none.
+    """
+    if not directory or is_multi:
+        return directory
+    return f"{directory.rstrip('/')}/{name}"
 
 
 @dataclass(frozen=True)
@@ -97,17 +108,18 @@ class RTorrent:
         rows = self._call("d.multicall2", "", "main", *_FIELDS)
         torrents: list[Torrent] = []
         for row in rows:
-            h, name, size, complete, base_path, is_multi, finished = row
+            h, name, size, complete, directory, is_multi, finished = row
             if int(complete) != 1:
                 continue
+            base_path = _base_path(str(directory), str(name), bool(int(is_multi)))
             torrents.append(
                 Torrent(
                     hash=str(h),
                     name=str(name),
                     size=int(size),
                     is_multi=bool(int(is_multi)),
-                    base_path=str(base_path),
-                    base_rel=self._to_rel(str(base_path)),
+                    base_path=base_path,
+                    base_rel=self._to_rel(base_path) if base_path else "",
                     finished=int(finished),
                 )
             )
