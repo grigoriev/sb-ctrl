@@ -91,6 +91,9 @@ opens the API on purpose. TLS is terminated by a reverse proxy (see Deployment).
 | `GET /jobs/{id}` | - | the job's state |
 | `POST /jobs/{id}/retry` | - | `{job_id}` |
 | `GET /config` | - | effective config (secrets redacted) |
+
+`POST /plan` and `POST /jobs` answer 409 when rTorrent reports no path for the torrent. No job
+is created then, since lftp would have nothing to pull.
 | `PUT /config` | - | update config *(later phase)* |
 
 A thin CLI remains for the service entrypoint and the worker:

@@ -38,8 +38,12 @@ from sb_ctrl.rtorrent import RTorrent
 
 _NOT_FOUND = "job not found"
 _NO_TORRENT = "torrent not found"
+_NO_PATH = "the seedbox reports no path for this torrent"
 _JOB_ERRORS: dict[int | str, dict[str, Any]] = {404: {"description": _NOT_FOUND}}
-_TORRENT_ERRORS: dict[int | str, dict[str, Any]] = {404: {"description": _NO_TORRENT}}
+_TORRENT_ERRORS: dict[int | str, dict[str, Any]] = {
+    404: {"description": _NO_TORRENT},
+    409: {"description": _NO_PATH},
+}
 
 _log = logging.getLogger(__name__)
 
@@ -156,6 +160,14 @@ def _torrent_or_404(cfg: Config, torrent_hash: str) -> dict[str, Any]:
     if match is None:
         raise HTTPException(status_code=404, detail=_NO_TORRENT)
     return dataclasses.asdict(match)
+
+
+def _transferable(cfg: Config, torrent_hash: str) -> dict[str, Any]:
+    """The torrent behind ``torrent_hash``, refused when lftp would get no path to pull."""
+    torrent = _torrent_or_404(cfg, torrent_hash)
+    if not torrent["base_rel"]:
+        raise HTTPException(status_code=409, detail=_NO_PATH)
+    return torrent
 
 
 def _job_dir_or_404(cfg: Config, job_id: str) -> Path:
@@ -281,7 +293,7 @@ def _add_library_routes(app: FastAPI) -> None:
 
     @app.post("/plan", dependencies=[AuthDep], responses=_TORRENT_ERRORS)
     def plan(req: PlanRequest, cfg: ConfigDep) -> dict[str, Any]:
-        return planner.plan(cfg, _torrent_or_404(cfg, req.hash), req.kind, req.name)
+        return planner.plan(cfg, _transferable(cfg, req.hash), req.kind, req.name)
 
     @app.get("/config", dependencies=[AuthDep])
     def config(cfg: ConfigDep) -> dict[str, Any]:
@@ -291,7 +303,7 @@ def _add_library_routes(app: FastAPI) -> None:
 def _add_job_routes(app: FastAPI) -> None:
     @app.post("/jobs", dependencies=[AuthDep], responses=_TORRENT_ERRORS)
     def create(req: RunRequest, cfg: ConfigDep) -> dict[str, Any]:
-        result = planner.plan(cfg, _torrent_or_404(cfg, req.hash), req.kind, req.name)
+        result = planner.plan(cfg, _transferable(cfg, req.hash), req.kind, req.name)
         if result["collision"] and req.collision != "overwrite":
             return {"skipped": True, "dest_path": result["dest_path"]}
         job = create_job(cfg.staging_root, result["job_spec"])

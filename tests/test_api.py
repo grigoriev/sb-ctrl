@@ -212,6 +212,22 @@ def test_create_job_skips_on_collision(tmp_path: Path, monkeypatch: pytest.Monke
     assert resp.json()["skipped"] is True
 
 
+class _PathlessRT(_FakeRT):
+    def list_completed(self) -> list[Torrent]:
+        return [replace(ONE, base_path="", base_rel="")]
+
+
+@pytest.mark.parametrize("route", ["/plan", "/jobs"])
+def test_a_torrent_without_a_path_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, route: str) -> None:
+    monkeypatch.setattr(api, "RTorrent", _PathlessRT)
+    monkeypatch.setattr(launcher, "launch", lambda job_id: pytest.fail("launched a job without a path"))
+    cfg = _open(root_movies=str(tmp_path / "movies"), staging_root=str(tmp_path / "staging"))
+    resp = _client(cfg).post(route, json={"hash": "H1", "kind": "movie", "collision": "overwrite"})
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "the seedbox reports no path for this torrent"
+    assert not jobs_dir(cfg.staging_root).exists() or not any(jobs_dir(cfg.staging_root).iterdir())
+
+
 def test_jobs_list_and_get(tmp_path: Path) -> None:
     cfg = _open(staging_root=str(tmp_path / "staging"))
     create_job(cfg.staging_root, {"name": "X"}, job_id="J1")

@@ -14,6 +14,8 @@ Releases before 0.8.0 are listed on the
 - A closed torrent transfers again. Its path came from `d.base_path`, which rTorrent
   leaves empty once a torrent is closed. lftp then got an empty path and the job failed
   at once. The path now comes from `d.directory`, which rTorrent always fills.
+- `POST /plan` and `POST /jobs` answer 409 with "the seedbox reports no path for this
+  torrent" when rTorrent still reports none. No job is created for it any more.
 
 ## [0.8.2] - 2026-09-30
 
