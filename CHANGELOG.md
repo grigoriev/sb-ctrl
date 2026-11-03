@@ -9,6 +9,12 @@ Releases before 0.8.0 are listed on the
 
 ## [Unreleased]
 
+### Fixed
+
+- A closed torrent transfers again. Its path came from `d.base_path`, which rTorrent
+  leaves empty once a torrent is closed. lftp then got an empty path and the job failed
+  at once. The path now comes from `d.directory`, which rTorrent always fills.
+
 ## [0.8.2] - 2026-09-30
 
 ### Security

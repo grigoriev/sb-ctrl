@@ -114,10 +114,12 @@ CLI for admin and debugging.
 ## 5. rTorrent integration
 
 - `d.multicall2` (XML-RPC POST, Basic auth) for the list; fields `d.hash`,
-  `d.name`, `d.size_bytes`, `d.complete`, `d.base_path`, `d.is_multi_file`.
+  `d.name`, `d.size_bytes`, `d.complete`, `d.directory`, `d.is_multi_file`.
 - Filter `complete == 1`. Sort newest first.
-- **Path mapping:** `d.base_path` (absolute on the seedbox, e.g.
-  `/home/<user>/files/<Title>`) → strip the home prefix → `files/<Title>` (this is
+- **Path mapping:** the download path, absolute on the seedbox (e.g.
+  `/home/<user>/files/<Title>`). It is `d.directory` for a folder, and `d.directory`/`d.name`
+  for a single file. Not `d.base_path`: rTorrent answers it with an empty string once a torrent
+  is closed. Then strip the home prefix → `files/<Title>` (this is
   `base_rel`) → lftp `cd files; mirror <Title>` (folder) / `get <Title>` (file).
 - File subset: `f.multicall` on the hash for per-file path/size/completed. One
   `system.multicall` carries the request for every torrent of the list.
