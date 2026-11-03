@@ -305,7 +305,10 @@ def _add_job_routes(app: FastAPI) -> None:
     def create(req: RunRequest, cfg: ConfigDep) -> dict[str, Any]:
         result = planner.plan(cfg, _transferable(cfg, req.hash), req.kind, req.name)
         if result["collision"] and req.collision != "overwrite":
-            return {"skipped": True, "dest_path": result["dest_path"]}
+            skipped = {"skipped": True, "dest_path": result["dest_path"]}
+            if "existing_size" in result:
+                skipped["existing_size"] = result["existing_size"]
+            return skipped
         job = create_job(cfg.staging_root, result["job_spec"])
         return {"job_id": job.name, "launcher": launcher.launch(job.name)}
 

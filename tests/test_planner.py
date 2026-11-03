@@ -60,6 +60,28 @@ def test_name_override_and_collision(tmp_path: Path) -> None:
     assert result["collision"] is True
 
 
+def test_a_file_in_the_way_reports_its_size(tmp_path: Path) -> None:
+    dest = tmp_path / "movies" / "Film 2024" / "Film 2024.mkv"
+    dest.parent.mkdir(parents=True)
+    dest.write_bytes(b"x" * 42)
+    result = plan(_cfg(tmp_path, "folder"), _torrent("Film 2024", "files/Film.2024.mkv", False), "movie")
+    assert result["collision"] is True
+    assert result["existing_size"] == 42
+
+
+def test_a_free_destination_reports_no_size(tmp_path: Path) -> None:
+    result = plan(_cfg(tmp_path, "folder"), _torrent("Film 2024", "files/Film.2024.mkv", False), "movie")
+    assert "existing_size" not in result
+
+
+def test_a_folder_in_the_way_reports_no_size(tmp_path: Path) -> None:
+    # A folder takes some files of a pack and skips others, so its size says nothing.
+    (tmp_path / "series" / "Chosen").mkdir(parents=True)
+    result = plan(_cfg(tmp_path), _torrent("raw name", "files/raw name", True), "series", name="Chosen")
+    assert result["collision"] is True
+    assert "existing_size" not in result
+
+
 def test_name_that_sanitizes_to_nothing_is_rejected(tmp_path: Path) -> None:
     cfg = _cfg(tmp_path)
     with pytest.raises(ValueError, match="not inside the library root"):

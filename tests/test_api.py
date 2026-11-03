@@ -210,6 +210,7 @@ def test_create_job_skips_on_collision(tmp_path: Path, monkeypatch: pytest.Monke
     cfg = _open(root_movies=str(tmp_path / "movies"), staging_root=str(tmp_path / "staging"))
     resp = _client(cfg).post("/jobs", json={"hash": "H1", "kind": "movie", "collision": "skip"})
     assert resp.json()["skipped"] is True
+    assert resp.json()["existing_size"] == 1
 
 
 class _PathlessRT(_FakeRT):

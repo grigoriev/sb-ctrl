@@ -9,6 +9,12 @@ Releases before 0.8.0 are listed on the
 
 ## [Unreleased]
 
+### Added
+
+- `POST /plan`, and `POST /jobs` when it skips, report `existing_size`: the size of a
+  file already at the destination. A client can then tell the same release from another
+  one before it replaces the file.
+
 ### Fixed
 
 - A closed torrent transfers again. Its path came from `d.base_path`, which rTorrent

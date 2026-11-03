@@ -85,12 +85,16 @@ opens the API on purpose. TLS is terminated by a reverse proxy (see Deployment).
 | `GET /torrents` | - | `{items:[{hash,name,size,is_multi,base_rel,finished,job?,delivered,library?}]}` completed, newest first |
 | `GET /torrents/{hash}/files` | - | `{files:[{index,path,size,done}]}` *(later phase)* |
 | `GET /search` | `kind`, `name` | `{guess_kind, candidates:[...]}` *(TMDb phase)* |
-| `POST /plan` | `{hash, kind, name?}` | `{job_spec, dest_path, collision}` (preview, no side effects) |
+| `POST /plan` | `{hash, kind, name?}` | `{job_spec, dest_path, collision, existing_size?}` (preview, no side effects) |
 | `POST /jobs` | `{job_spec, collision: overwrite\|skip\|cancel}` | `{job_id, launcher}`: creates and launches the job |
 | `GET /jobs` | - | `{jobs:[{id,name,state,pct,rate,eta,error?}]}` |
 | `GET /jobs/{id}` | - | the job's state |
 | `POST /jobs/{id}/retry` | - | `{job_id}` |
 | `GET /config` | - | effective config (secrets redacted) |
+
+`existing_size` is the size in bytes of a file already at `dest_path`. It is absent when the
+destination is free or a folder. A client compares it with the torrent size to tell the same
+release from another one. `POST /jobs` with `collision: skip` returns it next to `skipped`.
 
 `POST /plan` and `POST /jobs` answer 409 when rTorrent reports no path for the torrent. No job
 is created then, since lftp would have nothing to pull.

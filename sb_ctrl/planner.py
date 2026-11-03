@@ -18,6 +18,8 @@ def plan(cfg: Config, torrent: dict[str, Any], kind: str, name: str | None = Non
 
     Returns ``{job_spec, dest_path, collision}``; ``collision`` is true when the
     destination already exists, to be resolved by the caller before ``run``.
+    ``existing_size`` is added when a file is in the way, so the caller can tell
+    the same release from another one.
     """
     display = name or str(torrent["name"])
     safe = sanitize(display)
@@ -73,7 +75,11 @@ def plan(cfg: Config, torrent: dict[str, Any], kind: str, name: str | None = Non
         "staging_root": cfg.staging_root,
         "plex": {"url": cfg.plex_url, "token": cfg.plex_token},
     }
-    return {"job_spec": spec, "dest_path": dest_path, "collision": os.path.exists(_inside(root, dest_path))}
+    dest = _inside(root, dest_path)
+    result: dict[str, Any] = {"job_spec": spec, "dest_path": dest_path, "collision": os.path.exists(dest)}
+    if os.path.isfile(dest):
+        result["existing_size"] = os.path.getsize(dest)
+    return result
 
 
 def _inside(root: str, path: str) -> str:
