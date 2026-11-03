@@ -9,6 +9,8 @@ Releases before 0.8.0 are listed on the
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-03
+
 ### Added
 
 - `POST /plan`, and `POST /jobs` when it skips, report `existing_size`: the size of a
