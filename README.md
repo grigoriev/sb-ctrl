@@ -56,6 +56,9 @@ POST /jobs/{id}/retry     re-run a failed job
 GET  /config              effective config (secrets redacted)
 ```
 
+`POST /plan` reports a file already at the destination with its size, `existing_size`.
+`POST /plan` and `POST /jobs` answer 409 when the seedbox reports no path for the torrent.
+
 A thin CLI remains for the worker (`sb-ctrl run-job <id>`, invoked by
 `systemd-run`) and admin (`list`, `status`, `config get`).
 
