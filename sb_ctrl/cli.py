@@ -86,6 +86,8 @@ def _cmd_run(stream: IO[str]) -> dict[str, Any]:
     cfg = load_config()
     data = json.loads(stream.read())
     spec = data["job_spec"]
+    if not spec.get("source", {}).get("base_rel"):
+        raise planner.NoPathError(planner.NO_PATH)
     collision = data.get("collision", "overwrite")
     if os.path.exists(spec["dest_path"]) and collision != "overwrite":
         return {"skipped": True, "dest_path": spec["dest_path"]}

@@ -7,10 +7,17 @@ The name is the TMDb match the client picked. A single-file movie is renamed to
 from __future__ import annotations
 
 import os
+import stat
 from typing import Any
 
 from sb_ctrl.config import Config
 from sb_ctrl.naming import root_for_kind, sanitize
+
+NO_PATH = "the seedbox reports no path for this torrent"
+
+
+class NoPathError(ValueError):
+    """The torrent has no path on the seedbox, so lftp would have nothing to pull."""
 
 
 def plan(cfg: Config, torrent: dict[str, Any], kind: str, name: str | None = None) -> dict[str, Any]:
@@ -19,13 +26,16 @@ def plan(cfg: Config, torrent: dict[str, Any], kind: str, name: str | None = Non
     Returns ``{job_spec, dest_path, collision}``; ``collision`` is true when the
     destination already exists, to be resolved by the caller before ``run``.
     ``existing_size`` is added when a file is in the way, so the caller can tell
-    the same release from another one.
+    the same release from another one. Raises ``NoPathError`` for a torrent
+    without a path.
     """
     display = name or str(torrent["name"])
     safe = sanitize(display)
     root = root_for_kind(cfg, kind)
     is_multi = bool(torrent["is_multi"])
     base_rel = str(torrent["base_rel"])
+    if not base_rel:
+        raise NoPathError(NO_PATH)
     basename = base_rel.rstrip("/").rsplit("/", 1)[-1]
     is_film = kind in ("movie", "cartoon")
 
@@ -75,10 +85,14 @@ def plan(cfg: Config, torrent: dict[str, Any], kind: str, name: str | None = Non
         "staging_root": cfg.staging_root,
         "plex": {"url": cfg.plex_url, "token": cfg.plex_token},
     }
-    dest = _inside(root, dest_path)
-    result: dict[str, Any] = {"job_spec": spec, "dest_path": dest_path, "collision": os.path.exists(dest)}
-    if os.path.isfile(dest):
-        result["existing_size"] = os.path.getsize(dest)
+    # One look at the destination: a worker can replace the file between two.
+    try:
+        found: os.stat_result | None = os.stat(_inside(root, dest_path))
+    except FileNotFoundError:
+        found = None
+    result: dict[str, Any] = {"job_spec": spec, "dest_path": dest_path, "collision": found is not None}
+    if found is not None and stat.S_ISREG(found.st_mode):
+        result["existing_size"] = found.st_size
     return result
 
 

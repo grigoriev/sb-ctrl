@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from sb_ctrl.config import Config
-from sb_ctrl.planner import plan
+from sb_ctrl.planner import NoPathError, plan
 
 
 def _cfg(tmp_path: Path, movie_layout: str = "folder") -> Config:
@@ -79,6 +81,28 @@ def test_a_folder_in_the_way_reports_no_size(tmp_path: Path) -> None:
     (tmp_path / "series" / "Chosen").mkdir(parents=True)
     result = plan(_cfg(tmp_path), _torrent("raw name", "files/raw name", True), "series", name="Chosen")
     assert result["collision"] is True
+    assert "existing_size" not in result
+
+
+def test_a_torrent_without_a_path_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(NoPathError, match="the seedbox reports no path for this torrent"):
+        plan(_cfg(tmp_path), _torrent("Film 2024", "", False), "movie")
+
+
+def test_a_file_that_goes_during_the_preview_reports_no_size(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # A worker removes the old file right before it moves the new one in.
+    dest = tmp_path / "movies" / "Film 2024" / "Film 2024.mkv"
+    dest.parent.mkdir(parents=True)
+    dest.write_bytes(b"x")
+    real_stat = os.stat
+
+    def gone(path: str, *args: Any, **kwargs: Any) -> os.stat_result:
+        if str(path) == str(dest):
+            raise FileNotFoundError(path)
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "stat", gone)
+    result = plan(_cfg(tmp_path, "folder"), _torrent("Film 2024", "files/Film.2024.mkv", False), "movie")
     assert "existing_size" not in result
 
 
