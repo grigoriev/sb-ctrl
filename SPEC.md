@@ -91,6 +91,7 @@ opens the API on purpose. TLS is terminated by a reverse proxy (see Deployment).
 | `GET /jobs/{id}` | - | the job's state |
 | `POST /jobs/{id}/retry` | - | `{job_id}` |
 | `GET /config` | - | effective config (secrets redacted) |
+| `PUT /config` | - | update config *(later phase)* |
 
 `existing_size` is the size in bytes of a file already at `dest_path`. It is absent when the
 destination is free or a folder. A client compares it with the torrent size to tell the same
@@ -98,7 +99,6 @@ release from another one. `POST /jobs` with `collision: skip` returns it next to
 
 `POST /plan` and `POST /jobs` answer 409 when rTorrent reports no path for the torrent. No job
 is created then, since lftp would have nothing to pull.
-| `PUT /config` | - | update config *(later phase)* |
 
 A thin CLI remains for the service entrypoint and the worker:
 `sb-ctrl serve` (run the API under uvicorn), `sb-ctrl run-job <id>` (invoked by
