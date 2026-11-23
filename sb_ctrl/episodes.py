@@ -18,8 +18,11 @@ from pathlib import Path
 
 from sb_ctrl.config import DEFAULT_SKIP_PATTERNS, DEFAULT_SUB_EXT, DEFAULT_VIDEO_EXT
 
-# S01E02, S01.E02, 1x02, S01x02
-_MARKED = re.compile(r"[Ss](\d{1,2})[\s._-]*[Ee](\d{1,3})|(?:\b|(?<=[Ss]))(\d{1,2})x(\d{1,2})\b")
+# S01E02, S01.E02, 1x02, S01x02; an underscore counts as a separator
+_MARKED = re.compile(
+    r"[Ss](\d{1,2})[\s._-]*[Ee](\d{1,3})"
+    r"|(?:(?<![A-Za-z0-9])|(?<=[Ss]))(\d{1,2})x(\d{1,2})(?![A-Za-z0-9])"
+)
 # 102 for season 1, episode 2: an old convention, and the weakest reading
 _JOINED = re.compile(r"\b(\d)(\d\d)\b")
 # "S01 - Unwavering Resolve", "Show [S01 2024]", "Season 2", "Сезон 2", and

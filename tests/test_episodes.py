@@ -16,6 +16,8 @@ def test_parse_episode_formats() -> None:
     assert parse_episode("GangsterlendS02x03.mkv") == (2, 3)
     assert parse_episode("Show.s1x05.mkv") == (1, 5)
     assert parse_episode("Show.S01x264.mkv") is None
+    assert parse_episode("ShowS02x03_1080p.mkv") == (2, 3)
+    assert parse_episode("Show_3x08_720p.mkv") == (3, 8)
     assert parse_episode("Show 102.mkv") == (1, 2)
     assert parse_episode("Show.mkv") is None
 
