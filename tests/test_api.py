@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from sb_ctrl import api, launcher, tmdb
 from sb_ctrl.config import Config
-from sb_ctrl.jobs import create_job, jobs_dir, write_state
+from sb_ctrl.jobs import create_job, jobs_dir, read_spec, write_state
 from sb_ctrl.rtorrent import Torrent
 from sb_ctrl.tmdb import Candidate
 
@@ -245,6 +245,18 @@ def test_retry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client(cfg)
     assert client.post("/jobs/J2/retry").json()["job_id"] == "J2"
     assert client.post("/jobs/NOPE/retry").status_code == 404
+
+
+def test_retry_takes_current_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(launcher, "launch", lambda job_id: "systemd")
+    cfg = _open(staging_root=str(tmp_path / "staging"), group="media")
+    old = {"name": "X", "dest_path": "/lib/X", "perms": {"owner": "plex", "group": "admin"}}
+    job = create_job(cfg.staging_root, old, job_id="J3")
+    _client(cfg).post("/jobs/J3/retry")
+    spec = read_spec(job)
+    assert spec["perms"]["group"] == "media"
+    assert spec["dest_path"] == "/lib/X"
+    assert spec["id"] == "J3"
 
 
 def test_config_redacts(tmp_path: Path) -> None:

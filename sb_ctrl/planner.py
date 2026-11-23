@@ -70,6 +70,26 @@ def plan(cfg: Config, torrent: dict[str, Any], kind: str, name: str | None = Non
         },
         "staging_item": staging_item,
         "dest_path": dest_path,
+        **settings(cfg),
+        "staging_root": cfg.staging_root,
+    }
+    # One look at the destination: a worker can replace the file between two.
+    try:
+        found: os.stat_result | None = os.stat(_inside(root, dest_path))
+    except FileNotFoundError:
+        found = None
+    result: dict[str, Any] = {"job_spec": spec, "dest_path": dest_path, "collision": found is not None}
+    if found is not None and stat.S_ISREG(found.st_mode):
+        result["existing_size"] = found.st_size
+    return result
+
+
+def settings(cfg: Config) -> dict[str, Any]:
+    """The parts of a job spec that come from the config, not from the torrent.
+
+    A retry takes them anew, so a fixed config also fixes a failed job.
+    """
+    return {
         "perms": {
             "owner": cfg.owner,
             "group": cfg.group,
@@ -82,18 +102,8 @@ def plan(cfg: Config, torrent: dict[str, Any], kind: str, name: str | None = Non
             "sub_ext": cfg.sub_ext,
             "skip_patterns": cfg.skip_patterns,
         },
-        "staging_root": cfg.staging_root,
         "plex": {"url": cfg.plex_url, "token": cfg.plex_token},
     }
-    # One look at the destination: a worker can replace the file between two.
-    try:
-        found: os.stat_result | None = os.stat(_inside(root, dest_path))
-    except FileNotFoundError:
-        found = None
-    result: dict[str, Any] = {"job_spec": spec, "dest_path": dest_path, "collision": found is not None}
-    if found is not None and stat.S_ISREG(found.st_mode):
-        result["existing_size"] = found.st_size
-    return result
 
 
 def _inside(root: str, path: str) -> str:

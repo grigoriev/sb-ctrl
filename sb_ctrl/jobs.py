@@ -1,6 +1,6 @@
 """Transfer job state under ``<staging_root>/.jobs/<id>/``.
 
-Each job holds ``spec.json`` (the immutable transfer plan) and ``state.json``
+Each job holds ``spec.json`` (the transfer plan; a retry renews its config settings) and ``state.json``
 (the live state read by ``sb-ctrl status``). See SPEC.md section 8.
 """
 
@@ -76,6 +76,18 @@ def create_job(staging_root: str, spec: dict[str, Any], job_id: str | None = Non
 def read_spec(job_dir: Path) -> dict[str, Any]:
     data: dict[str, Any] = json.loads((job_dir / "spec.json").read_text())
     return data
+
+
+def requeue(job_dir: Path, settings: dict[str, Any]) -> None:
+    """Queue the job again, with ``settings`` from the current config in its spec.
+
+    What to pull and where it goes stay as planned.
+    """
+    spec = {**read_spec(job_dir), **settings}
+    tmp = job_dir / "spec.json.tmp"
+    tmp.write_text(json.dumps(spec, indent=2))
+    tmp.replace(job_dir / "spec.json")
+    write_state(job_dir, state="queued", error="", pct=0)
 
 
 def write_state(job_dir: Path, **fields: Any) -> None:

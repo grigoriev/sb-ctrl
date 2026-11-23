@@ -228,7 +228,8 @@ samples, extras/featurettes, `.nfo`, `.txt`, images.
   6. `state = done` (or `failed`). **No Plex trigger** (Plex auto-scans). **No
      seedbox change** (keeps seeding, stays in the list).
 - **Concurrency:** multiple jobs may run in parallel; one job = one torrent.
-- **Retry:** manual only (`retry <id>`); `-c` resumes.
+- **Retry:** manual only (`retry <id>`); `-c` resumes. A retry takes `perms`, `lftp`,
+  `files` and `plex` from the current config; source and destination stay as planned.
 
 ---
 
