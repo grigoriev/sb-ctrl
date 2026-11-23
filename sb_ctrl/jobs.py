@@ -10,6 +10,7 @@ import contextlib
 import json
 import os
 import shutil
+import tempfile
 import time
 from collections.abc import Iterable
 from pathlib import Path
@@ -84,9 +85,10 @@ def requeue(job_dir: Path, settings: dict[str, Any]) -> None:
     What to pull and where it goes stay as planned.
     """
     spec = {**read_spec(job_dir), **settings}
-    tmp = job_dir / "spec.json.tmp"
-    tmp.write_text(json.dumps(spec, indent=2))
-    tmp.replace(job_dir / "spec.json")
+    # a name of its own, so two retries of one job never write into the same file
+    with tempfile.NamedTemporaryFile("w", dir=job_dir, prefix="spec.", suffix=".tmp", delete=False) as tmp:
+        tmp.write(json.dumps(spec, indent=2))
+    Path(tmp.name).replace(job_dir / "spec.json")
     write_state(job_dir, state="queued", error="", pct=0)
 
 

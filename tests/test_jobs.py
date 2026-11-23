@@ -18,6 +18,7 @@ from sb_ctrl.jobs import (
     read_state,
     reconcile,
     release_name,
+    requeue,
     summary,
     tail_log,
     write_state,
@@ -208,3 +209,13 @@ def test_reconcile_survives_a_job_with_no_spec(tmp_path: Path) -> None:
     (job / "spec.json").unlink()
     reconcile(str(tmp_path))
     assert read_state(job)["state"] == "done"
+
+
+def test_requeue_writes_through_its_own_temporary_file(tmp_path: Path) -> None:
+    job = create_job(str(tmp_path), {"name": "X", "perms": {"group": "admin"}}, job_id="J1")
+    # another retry of the same job holds the fixed temporary name
+    (job / "spec.json.tmp").mkdir()
+    requeue(job, {"perms": {"group": "media"}})
+    assert read_spec(job)["perms"]["group"] == "media"
+    assert read_state(job)["state"] == "queued"
+    assert sorted(p.name for p in job.iterdir()) == ["spec.json", "spec.json.tmp", "state.json"]
