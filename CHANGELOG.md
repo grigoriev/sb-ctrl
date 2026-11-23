@@ -9,6 +9,12 @@ Releases before 0.8.0 are listed on the
 
 ## [Unreleased]
 
+### Fixed
+
+- A season pack with episodes named like `ShowS02x03.mkv` is laid out again. The
+  `S02x03` form was not recognized, and the job failed with "no episodes recognized in
+  the pack".
+
 ## [0.9.0] - 2026-11-03
 
 ### Added
