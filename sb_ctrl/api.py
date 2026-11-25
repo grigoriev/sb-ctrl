@@ -31,8 +31,8 @@ from sb_ctrl.jobs import (
     read_state,
     reconcile,
     release_name,
+    requeue,
     tail_log,
-    write_state,
 )
 from sb_ctrl.rtorrent import RTorrent
 
@@ -332,7 +332,7 @@ def _add_job_routes(app: FastAPI) -> None:
     @app.post("/jobs/{job_id}/retry", dependencies=[AuthDep], responses=_JOB_ERRORS)
     def retry(job_id: str, cfg: ConfigDep) -> dict[str, Any]:
         job_dir = _job_dir_or_404(cfg, job_id)
-        write_state(job_dir, state="queued", error="", pct=0)
+        requeue(job_dir, planner.settings(cfg))
         return {"job_id": job_dir.name, "launcher": launcher.launch(job_dir.name)}
 
     @app.delete(

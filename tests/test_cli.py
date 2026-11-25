@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from sb_ctrl import cli, launcher, tmdb, worker
-from sb_ctrl.jobs import create_job, read_state
+from sb_ctrl.jobs import create_job, read_spec, read_state
 from sb_ctrl.rtorrent import Torrent
 from sb_ctrl.tmdb import Candidate
 
@@ -204,6 +204,14 @@ def test_retry_resets_state_and_launches(
     assert cli.main(["retry", "J9"]) == 0
     assert json.loads(capsys.readouterr().out)["job_id"] == "J9"
     assert read_state(job)["state"] == "queued"
+
+
+def test_retry_takes_current_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SB_CTRL_CONFIG", str(_write_cfg(tmp_path)))
+    job = create_job(f"{tmp_path}/staging", {"name": "X", "perms": {"group": "admin"}}, job_id="J8")
+    monkeypatch.setattr(launcher, "launch", lambda jid: "systemd")
+    assert cli.main(["retry", "J8"]) == 0
+    assert read_spec(job)["perms"]["group"] == "plex"
 
 
 def test_hash_password_reads_stdin(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:

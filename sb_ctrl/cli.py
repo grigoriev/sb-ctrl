@@ -19,7 +19,7 @@ from typing import IO, Any
 
 from sb_ctrl import __version__, auth, launcher, planner, tmdb, worker
 from sb_ctrl.config import Config, load_config
-from sb_ctrl.jobs import create_job, jobs_dir, list_jobs, write_state
+from sb_ctrl.jobs import create_job, jobs_dir, list_jobs, requeue
 from sb_ctrl.rtorrent import RTorrent
 
 
@@ -104,7 +104,7 @@ def _cmd_run_job(job_id: str) -> dict[str, Any]:
 
 def _cmd_retry(job_id: str) -> dict[str, Any]:
     cfg = load_config()
-    write_state(jobs_dir(cfg.staging_root) / job_id, state="queued", error="", pct=0)
+    requeue(jobs_dir(cfg.staging_root) / job_id, planner.settings(cfg))
     mode = launcher.launch(job_id)
     return {"job_id": job_id, "launcher": mode}
 

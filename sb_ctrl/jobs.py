@@ -1,6 +1,6 @@
 """Transfer job state under ``<staging_root>/.jobs/<id>/``.
 
-Each job holds ``spec.json`` (the immutable transfer plan) and ``state.json``
+Each job holds ``spec.json`` (the transfer plan; a retry renews its config settings) and ``state.json``
 (the live state read by ``sb-ctrl status``). See SPEC.md section 8.
 """
 
@@ -10,12 +10,14 @@ import contextlib
 import json
 import os
 import shutil
+import tempfile
 import time
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
 STATE_FILE = "state.json"
+SPEC_FILE = "spec.json"
 
 
 def jobs_dir(staging_root: str) -> Path:
@@ -68,14 +70,27 @@ def create_job(staging_root: str, spec: dict[str, Any], job_id: str | None = Non
     job = jobs_dir(staging_root) / job_id
     job.mkdir(parents=True, exist_ok=True)
     spec = {**spec, "id": job_id}
-    (job / "spec.json").write_text(json.dumps(spec, indent=2))
+    (job / SPEC_FILE).write_text(json.dumps(spec, indent=2))
     write_state(job, state="queued", pct=0, created=int(time.time()), **summary(spec))
     return job
 
 
 def read_spec(job_dir: Path) -> dict[str, Any]:
-    data: dict[str, Any] = json.loads((job_dir / "spec.json").read_text())
+    data: dict[str, Any] = json.loads((job_dir / SPEC_FILE).read_text())
     return data
+
+
+def requeue(job_dir: Path, settings: dict[str, Any]) -> None:
+    """Queue the job again, with ``settings`` from the current config in its spec.
+
+    What to pull and where it goes stay as planned.
+    """
+    spec = {**read_spec(job_dir), **settings}
+    # a name of its own, so two retries of one job never write into the same file
+    with tempfile.NamedTemporaryFile("w", dir=job_dir, prefix="spec.", suffix=".tmp", delete=False) as tmp:
+        tmp.write(json.dumps(spec, indent=2))
+    Path(tmp.name).replace(job_dir / SPEC_FILE)
+    write_state(job_dir, state="queued", error="", pct=0)
 
 
 def write_state(job_dir: Path, **fields: Any) -> None:

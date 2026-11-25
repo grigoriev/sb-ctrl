@@ -9,6 +9,13 @@ Releases before 0.8.0 are listed on the
 
 ## [Unreleased]
 
+### Fixed
+
+- A retry takes the permissions, lftp, file and Plex settings from the current config.
+  Before, it reused the settings saved when the job was created. A job that failed on a
+  wrong setting, for example a group that does not exist, then failed again after the
+  config was fixed.
+
 ## [0.9.0] - 2026-11-03
 
 ### Added
